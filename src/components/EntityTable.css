@@ -1,0 +1,76 @@
+.table__wrapper {
+    overflow-x: auto;
+    background: var(--surface);
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table__row {
+    transition: background-color 0.2s ease;
+}
+
+.table__row--priority {
+    background-color: rgba(249, 115, 22, 0.1);
+}
+
+.table__row--priority:hover {
+    background-color: rgba(249, 115, 22, 0.18);
+}
+
+.table th,
+.table td {
+    padding: 0.85rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.table thead {
+    background-color: rgba(37, 99, 235, 0.05);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+}
+
+.table__actions {
+    white-space: nowrap;
+    text-align: right;
+}
+
+.table__button {
+    border: none;
+    border-radius: 9999px;
+    padding: 0.35rem 0.9rem;
+    margin-left: 0.5rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.table__button--edit {
+    background-color: rgba(37, 99, 235, 0.15);
+    color: var(--brand-primary);
+}
+
+.table__button--delete {
+    background-color: rgba(248, 113, 113, 0.18);
+    color: #dc2626;
+}
+
+.table__button:hover {
+    opacity: 0.8;
+}
+
+.table__state {
+    padding: 1rem;
+    background: var(--surface);
+    border-radius: 0.75rem;
+    text-align: center;
+    color: var(--text-secondary);
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}

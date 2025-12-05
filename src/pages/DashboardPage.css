@@ -1,0 +1,18 @@
+.dashboard__title {
+    margin: 0 0 1.5rem;
+    font-size: 2rem;
+}
+
+.dashboard__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.25rem;
+}
+
+.dashboard__state {
+    background: var(--surface);
+    padding: 1.5rem;
+    border-radius: 0.75rem;
+    text-align: center;
+    color: var(--text-secondary);
+}

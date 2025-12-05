@@ -1,0 +1,36 @@
+.stat {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: var(--surface);
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.stat__icon {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    background: rgba(37, 99, 235, 0.12);
+    border-radius: 50%;
+    color: var(--brand-primary);
+    font-size: 1.4rem;
+}
+
+.stat__content {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat__label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.stat__value {
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
