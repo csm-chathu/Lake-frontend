@@ -19,7 +19,8 @@ jobs:
           node-version: '18'
 
       - name: Install dependencies
-        run: npm ci
+        # Try a clean install with lockfile when available, otherwise fall back to `npm install`.
+        run: npm ci || npm install
 
       - name: Build
         run: npm run build
