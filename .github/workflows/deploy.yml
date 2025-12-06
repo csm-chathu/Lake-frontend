@@ -25,13 +25,20 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Show build output (debug)
+        run: |
+          echo "Contents of workspace root:"
+          ls -la
+          echo "Contents of ./dist (if produced):"
+          if [ -d "./dist" ]; then ls -la ./dist; else echo "dist folder not found"; fi
+
       - name: Deploy to Namecheap via FTP
         uses: SamKirkland/FTP-Deploy-Action@4.3.0
         with:
           server: "$${{ secrets.FTP_HOST }}"
           username: "$${{ secrets.FTP_USERNAME }}"
           password: "$${{ secrets.FTP_PASSWORD }}"
-          local-dir: ./dist
+          local-dir: ./dist/
           server-dir: "$${{ secrets.FTP_DEST }}"
           protocol: ftp
           passive: true
