@@ -1,0 +1,37 @@
+name: Build and Deploy to Namecheap
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Namecheap via FTP
+        uses: SamKirkland/FTP-Deploy-Action@4.3.0
+        with:
+          server: "$${{ secrets.FTP_HOST }}"
+          username: "$${{ secrets.FTP_USERNAME }}"
+          password: "$${{ secrets.FTP_PASSWORD }}"
+          local-dir: ./dist
+          server-dir: "$${{ secrets.FTP_DEST }}"
+          protocol: ftp
+          passive: true
+          git-ftp-args: --insecure
