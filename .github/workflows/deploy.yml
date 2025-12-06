@@ -41,5 +41,3 @@ jobs:
           local-dir: ./dist/
           server-dir: "$${{ secrets.FTP_DEST }}"
           protocol: ftp
-          passive: true
-          git-ftp-args: --insecure
