@@ -10,34 +10,39 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Setup Node
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
+      # Install dependencies
       - name: Install dependencies
-        # Try a clean install with lockfile when available, otherwise fall back to `npm install`.
         run: npm ci || npm install
 
+      # Build project
       - name: Build
         run: npm run build
 
-      - name: Show build output (debug)
+      # Debug (optional, shows build output)
+      - name: Show build output
         run: |
-          echo "Contents of workspace root:"
+          echo "Root files:"
           ls -la
-          echo "Contents of ./dist (if produced):"
-          if [ -d "./dist" ]; then ls -la ./dist; else echo "dist folder not found"; fi
+          echo "Dist output:"
+          ls -la dist || echo "dist folder missing"
 
+      # Deploy to Namecheap cPanel FTP
       - name: Deploy to Namecheap via FTP
         uses: SamKirkland/FTP-Deploy-Action@4.3.0
         with:
-          server: "$${{ secrets.FTP_HOST }}"
-          username: "$${{ secrets.FTP_USERNAME }}"
-          password: "$${{ secrets.FTP_PASSWORD }}"
-          local-dir: ./dist/
-          server-dir: "$${{ secrets.FTP_DEST }}"
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
+          local-dir: dist
+          server-dir: ${{ secrets.FTP_DEST }}
