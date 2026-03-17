@@ -36,13 +36,14 @@ jobs:
           echo "Dist output:"
           ls -la dist || echo "dist folder missing"
 
-      # Deploy to Namecheap cPanel FTP
-      - name: Deploy to Namecheap via FTP
-        uses: SamKirkland/FTP-Deploy-Action@4.3.0
+# Deploy to Namecheap via SFTP (SSH)
+      - name: Deploy to Namecheap via SFTP
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
-          server: ${{ secrets.FTP_HOST }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftp
-          local-dir: dist/
-          server-dir: ${{ secrets.FTP_DEST }}
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 21098 # The port you used in CMD
+          local_path: './dist/*'
+          remote_path: '/home/lmucunal/public_html' # Verify this path in your SSH terminal
+          delete_remote_files: false
