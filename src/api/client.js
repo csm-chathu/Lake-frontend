@@ -1,8 +1,22 @@
 import axios from 'axios';
 
 const client = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://api.magichatdigital.com/api',
-  timeout: 10000
+  // baseURL: 'http://127.0.0.1:8000/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://vet-api.sirilmotors.com/api',
+  timeout: 60000
+});
+// Attach auth token from localStorage on each request
+client.interceptors.request.use((config) => {
+  try {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  } catch (e) {
+    // ignore
+  }
+  return config;
 });
 
 client.interceptors.response.use(

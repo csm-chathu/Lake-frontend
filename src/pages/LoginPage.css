@@ -1,0 +1,316 @@
+/* Ensure root and body take full height so component can use 100vh reliably */
+html,
+body,
+#root,
+#app,
+#__next {
+    height: 100%;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+        sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #ffffff;
+    height: 100%;
+}
+
+.login-container {
+    display: flex;
+    min-height: 100vh;
+    height: 100vh;
+}
+
+.hero-section {
+    display: none;
+    width: 50%;
+    background: linear-gradient(135deg, #2563eb 0%, #6366f1 100%);
+    position: relative;
+    overflow: hidden;
+    height: 100vh;
+}
+
+
+.hero-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.hero-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(to top, rgba(37, 99, 235, 0.6), transparent);
+}
+
+.hero-content {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 48px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    color: white;
+    z-index: 10;
+}
+
+.hero-title {
+    font-size: 36px;
+    font-weight: 700;
+    margin-bottom: 16px;
+}
+
+.hero-text {
+    font-size: 18px;
+    line-height: 1.6;
+    opacity: 0.9;
+}
+
+.form-section {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 48px;
+    background-color: #ffffff;
+    height: 100vh;
+}
+
+@media (min-width: 1024px) {
+    .form-section {
+        width: 50%;
+    }
+}
+
+.form-card {
+    width: 100%;
+    max-width: 420px;
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    padding: 32px;
+}
+
+.form-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.logo-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100px;
+    height: 100px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    color: white;
+}
+
+.logo-icon svg {
+    width: 24px;
+    height: 24px;
+}
+
+.logo-image {
+    width: 90px;
+    height: 90px;
+    object-fit: contain;
+}
+
+.clinic-name {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1f2937;
+    margin-bottom: 8px;
+}
+
+.clinic-subtitle {
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: #1f2937;
+    margin-bottom: 8px;
+}
+
+.label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.forgot-link {
+    font-size: 12px;
+    color: #2563eb;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.forgot-link:hover {
+    color: #6366f1;
+}
+
+.form-input {
+    width: 100%;
+    height: 40px;
+    padding: 8px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #1f2937;
+    background-color: #f9fafb;
+    transition: all 0.2s ease;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #2563eb;
+    background-color: #ffffff;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.form-input::placeholder {
+    color: #9ca3af;
+}
+
+.submit-button {
+    width: 100%;
+    height: 40px;
+    margin-top: 24px;
+    padding: 0 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    color: white;
+    background-color: #2563eb;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.submit-button:hover {
+    background-color: #6366f1;
+}
+
+.submit-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 24px 0;
+}
+
+.divider-line {
+    flex: 1;
+    height: 1px;
+    background-color: #e5e7eb;
+}
+
+.divider-text {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+.google-button {
+    width: 100%;
+    height: 40px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background-color: #ffffff;
+    color: #1f2937;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.google-button:hover {
+    background-color: #f3f4f6;
+}
+
+.google-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.form-footer {
+    text-align: center;
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 24px;
+}
+
+.signup-link {
+    color: #2563eb;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.signup-link:hover {
+    color: #6366f1;
+}
+
+@media (min-width: 1024px) {
+    .hero-section {
+        display: flex;
+    }
+
+    .form-section {
+        width: 50%;
+    }
+}
+
+@media (max-width: 768px) {
+    .form-card {
+        padding: 24px;
+    }
+
+    .hero-content {
+        padding: 24px;
+    }
+
+    .hero-title {
+        font-size: 28px;
+    }
+
+    .hero-text {
+        font-size: 16px;
+    }
+
+    .form-section {
+        padding: 16px 24px;
+    }
+}

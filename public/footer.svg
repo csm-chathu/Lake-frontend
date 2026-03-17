@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 200">
+  <defs>
+    <style>
+      .text { fill: #0b3b82; font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; font-weight: 700; font-size: 36px; }
+      .paw { fill: #0b3b82; }
+    </style>
+  </defs>
+  <g opacity="0.12">
+    <g transform="translate(30,20)">
+      <path class="paw" d="M40 30c6-14 28-20 40-6 12-14 34-8 40 6 6 14-4 38-40 56-36-18-46-42-40-56z" />
+      <circle class="paw" cx="28" cy="12" r="10" />
+      <circle class="paw" cx="60" cy="8" r="8" />
+      <circle class="paw" cx="84" cy="18" r="9" />
+    </g>
+    <text x="220" y="80" class="text">Lake Clinic</text>
+  </g>
+</svg>

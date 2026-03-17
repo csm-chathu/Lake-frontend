@@ -34,15 +34,21 @@ const DEFAULT_BREEDS = ['Mixed breed', 'Unknown', 'Other'];
 const emptyPatient = {
   name: '',
   passbookNumber: '',
+  gender: '',
   species: '',
   breed: '',
   age: '',
+  ageYears: '',
+  ageMonths: '',
+  weight: '',
   ownerId: '',
   notes: ''
 };
 
 const PatientsPage = () => {
-  const { items, loading, error, createItem, updateItem, deleteItem } = useEntityApi('patients');
+  const { items, loading, error, createItem, updateItem, deleteItem, setParams, call: callPatients } = useEntityApi('patients');
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchDebounceRef = useRef(null);
   const {
     items: owners,
     loading: ownersLoading,
@@ -63,6 +69,10 @@ const PatientsPage = () => {
   const [ownerCreationError, setOwnerCreationError] = useState('');
   const [showPassbookModal, setShowPassbookModal] = useState(false);
   const [passbookData, setPassbookData] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const ownerOptions = useMemo(
     () =>
@@ -75,6 +85,18 @@ const PatientsPage = () => {
   );
 
   useEffect(() => {
+    // fetch next passbook preview on mount
+    (async () => {
+      try {
+        const resp = await callPatients('get', '/next-passbook');
+        if (resp.success && resp.data) {
+          setFormState((prev) => ({ ...prev, passbookNumber: resp.data.passbookNumber || '' }));
+        }
+      } catch (e) {
+        // ignore preview failures
+      }
+    })();
+
     const prefillName = location.state?.prefillPatientName;
     if (!prefillName || prefillAppliedRef.current) {
       return;
@@ -87,6 +109,15 @@ const PatientsPage = () => {
     });
     prefillAppliedRef.current = true;
   }, [location.state?.prefillPatientName]);
+
+  // update search params with debounce
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      setParams({ q: searchQuery || undefined });
+    }, 300);
+    return () => clearTimeout(searchDebounceRef.current);
+  }, [searchQuery, setParams]);
 
   const fields = useMemo(
     () => {
@@ -117,19 +148,27 @@ const PatientsPage = () => {
       return [
         { name: 'name', label: 'Patient name', placeholder: 'Luna' },
         {
-          name: 'passbookNumber',
-          label: 'Passbook number',
-          render: ({ value }) => (
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-slate-600">Passbook number</span>
-              <input
-                type="text"
-                value={value || 'Will be generated when saved'}
-                disabled
-                className="input input-bordered"
-              />
-              <span className="text-xs text-slate-500">Assigned automatically for patient passbooks.</span>
-            </label>
+          name: 'gender',
+          label: 'Gender',
+          render: ({ value, onChange }) => (
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-600">Gender</span>
+              <div className="flex items-center gap-4">
+                {['male', 'female', 'unknown'].map((option) => (
+                  <label key={option} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="gender"
+                      value={option}
+                      checked={value === option}
+                      onChange={(e) => onChange(e.target.value)}
+                      className="radio radio-sm"
+                    />
+                    <span className="capitalize text-sm">{option}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           )
         },
       {
@@ -187,7 +226,67 @@ const PatientsPage = () => {
           );
         }
       },
-      { name: 'age', label: 'Age', type: 'number', placeholder: '4' },
+      {
+        name: 'age',
+        label: 'Age',
+        render: ({ value, onChange }) => {
+          const years = formState.ageYears ?? '';
+          const months = formState.ageMonths ?? '';
+          return (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex flex-col">
+                <span className="text-sm font-medium text-slate-600">Years</span>
+                  <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={years}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/[^0-9]/g, '');
+                    setFormState((prev) => ({ ...prev, ageYears: v }));
+                  }}
+                  placeholder="Years"
+                  className="input input-bordered relative z-30"
+                />
+              </label>
+              <label className="flex flex-col">
+                <span className="text-sm font-medium text-slate-600">Months</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={months}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/[^0-9]/g, '');
+                    const nv = v === '' ? '' : String(Math.max(0, Math.min(11, Number(v))));
+                    setFormState((prev) => ({ ...prev, ageMonths: nv }));
+                  }}
+                  placeholder="Months"
+                  className="input input-bordered relative z-30"
+                />
+              </label>
+            </div>
+          );
+        }
+      },
+      {
+        name: 'weight',
+        label: 'Weight (kg)',
+        render: ({ value, onChange }) => (
+          <label className="form-control w-full">
+            <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-600">Weight (kg)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={value || ''}
+              onChange={(e) => onChange(e.target.value)}
+              className="input input-bordered"
+              placeholder="0.0"
+            />
+          </label>
+        )
+      },
       {
         name: 'ownerId',
         label: 'Owner',
@@ -322,6 +421,8 @@ const PatientsPage = () => {
     [
       ownerOptions,
       formState.species,
+      formState.ageYears,
+      formState.ageMonths,
       showOwnerCreator,
       newOwnerName,
       newOwnerPhone,
@@ -341,11 +442,21 @@ const PatientsPage = () => {
       },
       { header: 'Species', accessor: 'species' },
       { header: 'Breed', accessor: 'breed' },
+      { header: 'Gender', accessor: 'gender', render: (patient) => patient.gender || '—' },
       {
         header: 'Age',
         accessor: 'age',
-        render: (patient) => (patient.age ? `${patient.age} yrs` : '—')
+        render: (patient) => {
+          const y = patient.ageYears ?? patient.age;
+          const m = patient.ageMonths ?? null;
+          if (y == null && (m == null || m === 0)) return '—';
+          const parts = [];
+          if (y != null && y !== '') parts.push(`${y} yr${Number(y) !== 1 ? 's' : ''}`);
+          if (m != null && m !== '' && Number(m) > 0) parts.push(`${m} mo${Number(m) !== 1 ? 's' : ''}`);
+          return parts.join(' ');
+        }
       },
+      { header: 'Weight', accessor: 'weight', render: (patient) => patient.weight != null ? `${patient.weight} kg` : '—' },
       {
         header: 'Owner',
         accessor: 'owner',
@@ -366,49 +477,72 @@ const PatientsPage = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (isSaving) {
+      return;
+    }
+    setIsSaving(true);
+    // refresh passbook preview immediately before submitting so user can mark it
+    try {
+      const preview = await callPatients('get', '/next-passbook');
+      if (preview && preview.success && preview.data?.passbookNumber) {
+        setFormState((prev) => ({ ...prev, passbookNumber: preview.data.passbookNumber }));
+      }
+    } catch (e) {
+      // ignore preview failure
+    }
     const payload = {
       name: formState.name,
+      gender: formState.gender || null,
       species: formState.species,
       breed: formState.breed,
-      age: formState.age ? Number.parseInt(formState.age, 10) : null,
+      // send explicit years/months if provided
+      ageYears: formState.ageYears !== '' && formState.ageYears != null ? Number.parseInt(formState.ageYears, 10) : (formState.age !== '' && formState.age != null ? Number.parseInt(formState.age, 10) : null),
+      ageMonths: formState.ageMonths !== '' && formState.ageMonths != null ? Number.parseInt(formState.ageMonths, 10) : null,
+      weight: formState.weight !== '' && formState.weight != null ? Number(formState.weight) : null,
       ownerId: formState.ownerId ? Number(formState.ownerId) : null,
       notes: formState.notes
     };
 
     const action = editingId ? updateItem(editingId, payload) : createItem(payload);
-    const result = await action;
+    try {
+      const result = await action;
 
-    if (result.success) {
-      const createdPatient = result.data;
-      const isNewPatient = !editingId;
+      if (result.success) {
+        const createdPatient = result.data;
+        const isNewPatient = !editingId;
 
-      setFormState(emptyPatient);
-      setEditingId(null);
+        setFormState(emptyPatient);
+        setEditingId(null);
+        setShowEditModal(false);
 
-      if (isNewPatient) {
-        // Show passbook modal for new patients
-        setPassbookData({
-          name: createdPatient.name,
-          passbookNumber: createdPatient.passbookNumber,
-          species: createdPatient.species,
-          breed: createdPatient.breed,
-          ownerId: createdPatient.ownerId
-        });
-        setShowPassbookModal(true);
+        if (isNewPatient) {
+          // Show passbook modal for new patients
+          setPassbookData({
+            name: createdPatient.name,
+            gender: createdPatient.gender,
+            passbookNumber: createdPatient.passbookNumber,
+            species: createdPatient.species,
+            breed: createdPatient.breed,
+            ownerId: createdPatient.ownerId
+          });
+          setShowPassbookModal(true);
 
-        // If from appointments, navigate after modal is acknowledged
-        if (location.state?.fromAppointments) {
-          setTimeout(() => {
-            navigate(location.state.returnTo || '/appointments', {
-              replace: true,
-              state: {
-                selectedPatientId: createdPatient.id,
-                selectedPatientName: createdPatient.name
-              }
-            });
-          }, 2000);
+          // If from appointments, navigate after modal is acknowledged
+          if (location.state?.fromAppointments) {
+            setTimeout(() => {
+              navigate(location.state.returnTo || '/appointments', {
+                replace: true,
+                state: {
+                  selectedPatientId: createdPatient.id,
+                  selectedPatientName: createdPatient.name
+                }
+              });
+            }, 2000);
+          }
         }
       }
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -416,26 +550,48 @@ const PatientsPage = () => {
     setFormState({
       name: patient.name || '',
       passbookNumber: patient.passbookNumber || '',
+      gender: patient.gender || '',
       species: patient.species || '',
       breed: patient.breed || '',
       age: patient.age ?? '',
+      ageYears: patient.ageYears ?? (patient.age ?? ''),
+      ageMonths: patient.ageMonths ?? null,
+      weight: patient.weight != null ? String(patient.weight) : '',
       ownerId: patient.owner?.id || '',
       notes: patient.notes || ''
     });
     setEditingId(patient.id);
+    setShowEditModal(true);
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = (id) => {
+    // open confirmation modal
+    setDeleteTargetId(id);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    const id = deleteTargetId;
+    setShowDeleteConfirm(false);
+    setDeleteTargetId(null);
     await deleteItem(id);
     if (editingId === id) {
       setEditingId(null);
       setFormState(emptyPatient);
+      setShowEditModal(false);
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false);
+    setDeleteTargetId(null);
   };
 
   const resetForm = () => {
     setEditingId(null);
     setFormState(emptyPatient);
+    setShowEditModal(false);
   };
 
   return (
@@ -494,6 +650,12 @@ const PatientsPage = () => {
                     <p className="font-medium text-slate-800">{passbookData?.breed}</p>
                   </div>
                 )}
+                {passbookData?.gender && (
+                  <div>
+                    <p className="text-xs text-slate-500 uppercase tracking-wide">Gender</p>
+                    <p className="font-medium text-slate-800 capitalize">{passbookData?.gender}</p>
+                  </div>
+                )}
               </div>
 
               <p className="text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded p-3">
@@ -514,23 +676,85 @@ const PatientsPage = () => {
               </button>
             </div>
           </div>
-          <div className="modal-backdrop" onClick={() => {
+          <div className="modal-backdrop fixed inset-0 p-0 m-0 z-50" onClick={() => {
             setShowPassbookModal(false);
             setPassbookData(null);
           }}></div>
         </div>
       )}
 
-      <EntityForm
-        title={editingId ? 'Update patient' : 'Register new patient'}
-        fields={fields}
-        values={formState}
-        onChange={handleChange}
-        onSubmit={handleSubmit}
-        submitLabel={editingId ? 'Update patient' : 'Create patient'}
-        isEditing={Boolean(editingId)}
-        onCancel={resetForm}
-      />
+      {/* Delete confirmation modal */}
+      {showDeleteConfirm && (
+        <div className="modal modal-open" >
+          <div className="modal-box w-full max-w-sm">
+            <h3 className="text-lg font-bold text-slate-800 mb-2">Confirm deletion</h3>
+            <p className="text-sm text-slate-600">Are you sure you want to delete this patient? This action cannot be undone.</p>
+            <div className="modal-action mt-6 flex gap-2">
+              <button type="button" className="btn btn-ghost" onClick={cancelDelete}>Cancel</button>
+              <button type="button" className="btn btn-error" onClick={confirmDelete}>Delete</button>
+            </div>
+          </div>
+          <div className="modal-backdrop fixed inset-0 p-0 m-0 z-50" onClick={cancelDelete}></div>
+        </div>
+      )}
+
+      {/* Edit Patient Modal */}
+      {showEditModal && (
+        <div className="modal modal-open" style={{ marginTop: '0px' }}>
+          <div className="modal-box w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+            <button
+              type="button"
+              className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+              onClick={resetForm}
+            >
+              ✕
+            </button>
+            <div className="mb-4 flex items-start justify-between gap-4 pr-10">
+              <h3 className="text-lg font-bold text-slate-800">{editingId ? 'Edit patient' : 'Register new patient'}</h3>
+              <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-1 text-right">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-700">Passbook</p>
+                <p className="font-mono text-sm font-bold text-sky-900">{formState.passbookNumber || 'Pending'}</p>
+              </div>
+            </div>
+            <EntityForm
+              fields={fields}
+              values={formState}
+              onChange={handleChange}
+              onSubmit={handleSubmit}
+              submitLabel={editingId ? 'Update patient' : 'Create patient'}
+              isEditing={Boolean(editingId)}
+              onCancel={resetForm}
+              submitLoading={isSaving}
+              showCancel={true}
+            />
+          </div>
+          <form method="dialog" className="modal-backdrop" onClick={resetForm}></form>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-4">
+        <button
+          type="button"
+          className="btn btn-sm btn-primary"
+          onClick={() => {
+            setEditingId(null);
+            setFormState(emptyPatient);
+            setShowEditModal(true);
+          }}
+        >
+          + Add new patient
+        </button>
+        <div>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search patients, passbook, owner..."
+            className="input input-sm input-bordered w-full max-w-md"
+          />
+        </div>
+      </div>
+
       <EntityTable
         columns={columns}
         data={items}

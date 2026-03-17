@@ -2,6 +2,10 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 
 const currencyFormatter = new Intl.NumberFormat('en-LK', { style: 'currency', currency: 'LKR' });
+const plainNumberFormatter = new Intl.NumberFormat('en-LK', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
 const defaultOverlayStyle = { left: 0, top: 0, width: 0 };
 
 const DropdownPortal = ({ children, style }) => {
@@ -32,7 +36,8 @@ export const calculateMedicinesTotal = (rows = [], brandLookup = new Map()) => {
     if (!option) {
       return sum;
     }
-    const quantity = Number.parseInt(row.quantity, 10) || 0;
+    // allow fractional quantities (e.g. 0.5, 0.2)
+    const quantity = Number.parseFloat(row.quantity) || 0;
     if (quantity <= 0) {
       return sum;
     }
@@ -43,7 +48,18 @@ export const calculateMedicinesTotal = (rows = [], brandLookup = new Map()) => {
   return Number(total.toFixed(2));
 };
 
-const AppointmentMedicineSelector = ({ value, onChange, brandOptions, brandLookup, loading = false }) => {
+const AppointmentMedicineSelector = ({
+  value,
+  onChange,
+  brandOptions,
+  brandLookup,
+  loading = false,
+  addButtonLabel = 'Add medicine',
+  hideAddButton = false,
+  lockBrandSelection = false,
+  quantityStep = '0.1',
+  quantityMin = '0'
+}) => {
   const rows = Array.isArray(value) ? value : [];
   const hasBrandOptions = brandOptions.length > 0;
   const [activeIndex, setActiveIndex] = React.useState(null);
@@ -109,7 +125,7 @@ const AppointmentMedicineSelector = ({ value, onChange, brandOptions, brandLooku
 
   const rowsWithComputed = rows.map((row) => {
     const option = brandLookup.get(String(row.medicineBrandId));
-    const quantity = Number.parseInt(row.quantity, 10) || 0;
+    const quantity = Number.parseFloat(row.quantity) || 0;
     const unitPrice = option ? Number(option.price) : 0;
     const fallbackLabel = [option?.medicine?.name, option?.name].filter(Boolean).join(' — ');
     const query = typeof row.query === 'string' && row.query.length > 0 ? row.query : fallbackLabel || row.label || '';
@@ -122,6 +138,9 @@ const AppointmentMedicineSelector = ({ value, onChange, brandOptions, brandLooku
           .slice(0, 10)
       : [];
 
+    const selectedLabel = option?.label || row.label || fallbackLabel || '';
+    const [parsedMedicineName = '', parsedBrandName = ''] = String(selectedLabel).split(' — ');
+
     return {
       ...row,
       option,
@@ -130,7 +149,9 @@ const AppointmentMedicineSelector = ({ value, onChange, brandOptions, brandLooku
       totalPrice: Number((unitPrice * quantity).toFixed(2)),
       label: option ? option.label : row.label || fallbackLabel || '',
       query,
-      filteredOptions
+      filteredOptions,
+      medicineName: option?.medicineName || option?.medicine?.name || parsedMedicineName || '—',
+      brandName: option?.brandName || option?.name || parsedBrandName || '—'
     };
   });
 
@@ -195,6 +216,12 @@ const AppointmentMedicineSelector = ({ value, onChange, brandOptions, brandLooku
         updated.label = updated.query;
       }
 
+      // Enforce integer-only quantities when quantityStep is "1"
+      if (Object.prototype.hasOwnProperty.call(changes, 'quantity') && quantityStep === '1') {
+        const parsed = Number.parseFloat(updated.quantity) || 0;
+        updated.quantity = String(Math.max(0, Math.round(parsed)));
+      }
+
       return updated;
     });
 
@@ -239,10 +266,17 @@ const AppointmentMedicineSelector = ({ value, onChange, brandOptions, brandLooku
   };
 
   const handleSelectOption = (index, option) => {
+    // Determine default quantity based on medicine type
+    const labelLower = (option.label || '').toLowerCase();
+    const isVaccine = labelLower.includes('vaccine');
+    const isMeasuredInMl = labelLower.includes(' ml') || labelLower.includes('ml ');
+    const defaultQuantity = (isVaccine || isMeasuredInMl) ? '0.5' : '1';
+
     handleUpdateRow(index, {
       medicineBrandId: option.value,
       label: option.label,
-      query: option.label
+      query: option.label,
+      quantity: defaultQuantity
     });
     setActiveIndex(null);
     setOverlayStyle(defaultOverlayStyle);
@@ -263,28 +297,30 @@ const AppointmentMedicineSelector = ({ value, onChange, brandOptions, brandLooku
   };
 
   return (
-    <div className="rounded-xl border border-base-200 bg-base-100 p-4">
+    <div className="rounded-xl border border-base-200 bg-white p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-medium text-slate-700">Medicines dispensed</p>
           <p className="text-xs text-slate-500">Track dispensed brands to include them in billing.</p>
         </div>
-        <button
-          type="button"
-          className="btn btn-sm btn-outline"
-          onClick={handleAddRow}
-          disabled={!hasBrandOptions || loading}
-        >
-          Add medicine
-        </button>
+        {!hideAddButton && (
+          <button
+            type="button"
+            className="btn btn-sm btn-outline"
+            onClick={handleAddRow}
+            disabled={!hasBrandOptions || loading}
+          >
+            {addButtonLabel}
+          </button>
+        )}
       </div>
 
       {loading ? (
-        <div className="rounded-xl border border-dashed border-base-300 bg-base-200/40 p-4 text-center text-sm text-slate-500">
+        <div className="rounded-xl border border-dashed border-base-300 bg-white p-4 text-center text-sm text-slate-500">
           Loading available medicines…
         </div>
       ) : rowsWithComputed.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-base-300 bg-base-200/40 p-4 text-sm text-slate-500">
+        <div className="rounded-xl border border-dashed border-base-300 bg-white p-4 text-sm text-slate-500">
           {hasBrandOptions
             ? 'No medicines selected for this appointment.'
             : 'No medicines configured yet. Head to the Medicines tab to add inventory.'}
@@ -294,7 +330,7 @@ const AppointmentMedicineSelector = ({ value, onChange, brandOptions, brandLooku
           <table className="table table-sm">
             <thead>
               <tr className="text-xs uppercase text-slate-500">
-                <th>Medicine brand</th>
+                <th className="text-left">Brand</th>
                 <th className="text-right">Unit price</th>
                 <th className="w-28 text-right">Quantity</th>
                 <th className="text-right">Line total</th>
@@ -305,75 +341,77 @@ const AppointmentMedicineSelector = ({ value, onChange, brandOptions, brandLooku
               {rowsWithComputed.map((row, index) => (
                 <tr key={`${row.medicineBrandId || 'new'}-${index}`}>
                   <td className="align-top">
-                    <div className="relative">
-                      {!hasBrandOptions && !row.label && (
-                        <p className="mb-2 text-[11px] uppercase tracking-wide text-warning">
-                          Brand catalog unavailable — add inventory first.
-                        </p>
-                      )}
-                      <input
-                        type="text"
-                        ref={(element) => {
-                          inputRefs.current[index] = element;
-                        }}
-                        className="input input-bordered input-sm w-full pr-12"
-                        placeholder={
-                          hasBrandOptions ? 'Search medicine brands' : 'No brands available'
-                        }
-                        value={row.query || ''}
-                        onFocus={() => focusRow(index)}
-                        onBlur={scheduleBlur}
-                        onChange={(event) => handleSearchChange(index, event.target.value)}
-                        onKeyDown={(event) => handleInputKeyDown(event, index, row)}
-                        readOnly={!hasBrandOptions && Boolean(row.label)}
-                        disabled={!hasBrandOptions && !row.label}
-                      />
-                      {(row.medicineBrandId || row.query) && (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-xs absolute right-1 top-1/2 -translate-y-1/2"
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() =>
-                            handleUpdateRow(index, {
-                              medicineBrandId: '',
-                              label: '',
-                              query: ''
-                            })
+                    {lockBrandSelection ? (
+                      <div className="flex gap-2 items-start">
+                        {row.option?.image_url && (
+                          <div className="flex-shrink-0 w-10 h-10 bg-base-200 rounded border border-base-300 overflow-hidden">
+                            <img
+                              src={row.option.image_url}
+                              alt={row.option?.label}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
+                        <span className="text-sm font-medium text-slate-700">
+                          {row.option?.label || row.label || '—'}
+                          {row.option ? ` {${plainNumberFormatter.format(row.unitPrice)}}` : ''}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        {!hasBrandOptions && !row.label && (
+                          <p className="mb-2 text-[11px] uppercase tracking-wide text-warning">
+                            Brand catalog unavailable — add inventory first.
+                          </p>
+                        )}
+                        <input
+                          type="text"
+                          ref={(element) => {
+                            inputRefs.current[index] = element;
+                          }}
+                          className="input input-bordered input-sm w-full pr-12"
+                          placeholder={
+                            hasBrandOptions ? 'Search medicine brands' : 'No brands available'
                           }
-                        >
-                          Clear
-                        </button>
-                      )}
-                      {activeIndex === index && hasBrandOptions && overlayStyle.width > 0 && (
-                        <DropdownPortal style={overlayStyle}>
-                          {row.filteredOptions.map((option) => {
-                            const isSelected = option.value === row.medicineBrandId;
-                            return (
-                              <li key={option.value}>
-                                <button
-                                  type="button"
-                                  className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition ${
-                                    isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-base-200'
-                                  }`}
-                                  onMouseDown={(event) => event.preventDefault()}
-                                  onClick={() => handleSelectOption(index, option)}
-                                >
-                                  <span className="flex-1">{option.label}</span>
-                                  <span className="text-xs text-slate-500">
-                                    {Number.isFinite(option.price)
-                                      ? currencyFormatter.format(option.price)
-                                      : '—'}
-                                  </span>
-                                </button>
-                              </li>
-                            );
-                          })}
-                          {row.filteredOptions.length === 0 && (
-                            <li className="px-3 py-2 text-sm text-slate-500">No matches found.</li>
-                          )}
-                        </DropdownPortal>
-                      )}
-                    </div>
+                          value={row.query || ''}
+                          onFocus={() => focusRow(index)}
+                          onBlur={scheduleBlur}
+                          onChange={(event) => handleSearchChange(index, event.target.value)}
+                          onKeyDown={(event) => handleInputKeyDown(event, index, row)}
+                          readOnly={!hasBrandOptions && Boolean(row.label)}
+                          disabled={!hasBrandOptions && !row.label}
+                        />
+                        {activeIndex === index && hasBrandOptions && overlayStyle.width > 0 && (
+                          <DropdownPortal style={overlayStyle}>
+                            {row.filteredOptions.map((option) => {
+                              const isSelected = option.value === row.medicineBrandId;
+                              return (
+                                <li key={option.value}>
+                                  <button
+                                    type="button"
+                                    className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition ${
+                                      isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-base-200'
+                                    }`}
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => handleSelectOption(index, option)}
+                                  >
+                                    <span className="flex-1">{option.label}</span>
+                                    <span className="text-xs text-slate-500">
+                                      {Number.isFinite(option.price)
+                                        ? currencyFormatter.format(option.price)
+                                        : '—'}
+                                    </span>
+                                  </button>
+                                </li>
+                              );
+                            })}
+                            {row.filteredOptions.length === 0 && (
+                              <li className="px-3 py-2 text-sm text-slate-500">No matches found.</li>
+                            )}
+                          </DropdownPortal>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="text-right text-sm text-slate-600">
                     {row.option ? currencyFormatter.format(row.unitPrice) : '—'}
@@ -381,9 +419,9 @@ const AppointmentMedicineSelector = ({ value, onChange, brandOptions, brandLooku
                   <td className="text-right">
                     <input
                       type="number"
-                      min="1"
-                      step="1"
-                      className="input input-bordered input-sm w-full text-right"
+                      min={quantityMin}
+                      step={quantityStep}
+                      className="input input-xs w-12 text-right text-xs"
                       value={row.quantity || ''}
                       onChange={(event) => handleUpdateRow(index, { quantity: event.target.value })}
                     />
@@ -399,7 +437,23 @@ const AppointmentMedicineSelector = ({ value, onChange, brandOptions, brandLooku
                       className="btn btn-xs btn-ghost text-error"
                       onClick={() => handleRemoveRow(index)}
                     >
-                      Remove
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-4 w-4"
+                        aria-hidden="true"
+                      >
+                        <path d="M3 6h18" />
+                        <path d="M8 6v12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6" />
+                        <path d="M10 6V4a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v2" />
+                        <path d="M10 11v6" />
+                        <path d="M14 11v6" />
+                      </svg>
                     </button>
                   </td>
                 </tr>

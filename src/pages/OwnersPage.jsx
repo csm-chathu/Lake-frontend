@@ -11,15 +11,41 @@ const emptyOwner = {
 
 const OwnersPage = () => {
   const { items, loading, error, createItem, updateItem, deleteItem } = useEntityApi('owners');
+  const [searchQuery, setSearchQuery] = useState('');
   const [formState, setFormState] = useState(emptyOwner);
   const [editingId, setEditingId] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deleteModal, setDeleteModal] = useState({ open: false, id: null, name: '' });
 
   const fields = useMemo(
-    () => [
-      { name: 'firstName', label: 'Owner name', placeholder: 'Alex Fernando' },
-      { name: 'phone', label: 'Phone', placeholder: '077-000-0000' },
-      { name: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Preferred schedule, reminders, etc.' }
-    ],
+    () => {
+      const sriLankaPhoneHint = 'Enter 10-digit mobile/landline (e.g. 0771234567) or +94 format.';
+      return [
+        { name: 'firstName', label: 'Owner name', placeholder: 'Alex Fernando' },
+        {
+          name: 'phone',
+          label: 'Phone',
+          placeholder: '0771234567 or +94771234567',
+          pattern: '^(?:0|\\+94)(?:7\\d{8}|11\\d{7}|[1-9]\\d{8})$',
+          render: ({ value, onChange, placeholder, field }) => (
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-600">Phone</span>
+              <input
+                type="tel"
+                value={value || ''}
+                onChange={(event) => onChange(event.target.value)}
+                placeholder={placeholder}
+                pattern={field.pattern}
+                className="input input-bordered"
+              />
+              <span className="text-xs text-slate-500">{sriLankaPhoneHint}</span>
+            </label>
+          )
+        },
+        { name: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Preferred schedule, reminders, etc.' }
+      ];
+    },
     []
   );
 
@@ -34,11 +60,30 @@ const OwnersPage = () => {
       {
         header: 'Registered pets',
         accessor: 'patients',
-        render: (owner) => owner.patients?.length ?? 0
+        render: (owner) => {
+          if (typeof owner.patientsCount === 'number') {
+            return owner.patientsCount;
+          }
+          return owner.patients?.length ?? 0;
+        }
       }
     ],
     []
   );
+
+  const filteredItems = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return items;
+    }
+
+    return items.filter((owner) => {
+      const ownerName = owner.firstName || '';
+      const phone = owner.phone || '';
+      const notes = owner.notes || '';
+      return [ownerName, phone, notes].some((value) => value.toLowerCase().includes(query));
+    });
+  }, [items, searchQuery]);
 
   const handleChange = (name, value) => {
     setFormState((prev) => ({ ...prev, [name]: value }));
@@ -46,14 +91,29 @@ const OwnersPage = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const payload = { ...formState };
+    if (isSaving) {
+      return;
+    }
+    const sanitizedPhone = formState.phone ? formState.phone.replace(/\s|-/g, '') : '';
+    const sriLankaPattern = /^(?:0|\+94)(?:7\d{8}|11\d{7}|[1-9]\d{8})$/;
+    if (sanitizedPhone && !sriLankaPattern.test(sanitizedPhone)) {
+      alert('Enter a valid Sri Lankan phone number (e.g. 0771234567 or +94771234567).');
+      return;
+    }
+    setIsSaving(true);
+    const payload = { ...formState, phone: sanitizedPhone };
 
-    const action = editingId ? updateItem(editingId, payload) : createItem(payload);
-    const result = await action;
+    try {
+      const action = editingId ? updateItem(editingId, payload) : createItem(payload);
+      const result = await action;
 
-    if (result.success) {
-      setFormState(emptyOwner);
-      setEditingId(null);
+      if (result.success) {
+        setFormState(emptyOwner);
+        setEditingId(null);
+        setShowEditModal(false);
+      }
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -64,22 +124,43 @@ const OwnersPage = () => {
       notes: owner.notes || ''
     });
     setEditingId(owner.id);
+    setShowEditModal(true);
   };
 
-  const handleDelete = async (id) => {
+  const requestDelete = (id) => {
+    const owner = items.find((item) => item.id === id);
+    setDeleteModal({
+      open: true,
+      id,
+      name: owner?.firstName || 'this owner'
+    });
+  };
+
+  const cancelDelete = () => {
+    setDeleteModal({ open: false, id: null, name: '' });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteModal.id) {
+      return;
+    }
+    const id = deleteModal.id;
+    setDeleteModal({ open: false, id: null, name: '' });
     const result = await deleteItem(id);
     if (!result.success && result.message) {
-      // Preserve message via error state already handled in hook
+      // hook already surfaces the error
     }
     if (editingId === id) {
       setEditingId(null);
       setFormState(emptyOwner);
+      setShowEditModal(false);
     }
   };
 
   const resetForm = () => {
     setFormState(emptyOwner);
     setEditingId(null);
+    setShowEditModal(false);
   };
 
   return (
@@ -93,24 +174,78 @@ const OwnersPage = () => {
           <span>{error}</span>
         </div>
       )}
-      <EntityForm
-        title={editingId ? 'Update owner' : 'Add owner'}
-        fields={fields}
-        values={formState}
-        onChange={handleChange}
-        onSubmit={handleSubmit}
-        submitLabel={editingId ? 'Update owner' : 'Create owner'}
-        isEditing={Boolean(editingId)}
-        onCancel={resetForm}
-      />
+      <div className="flex items-center justify-between gap-4">
+        <button
+          type="button"
+          className="btn btn-sm btn-primary"
+          onClick={() => {
+            setEditingId(null);
+            setFormState(emptyOwner);
+            setShowEditModal(true);
+          }}
+        >
+          + Add new owner
+        </button>
+        <div>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search owners, phone, notes..."
+            className="input input-sm input-bordered w-full max-w-md"
+          />
+        </div>
+      </div>
+
+      {showEditModal && (
+        <div className="modal modal-open">
+          <div className="modal-box w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <button
+              type="button"
+              className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+              onClick={resetForm}
+            >
+              ✕
+            </button>
+            <h3 className="text-lg font-bold text-slate-800 mb-4">{editingId ? 'Update owner' : 'Add owner'}</h3>
+            <EntityForm
+              fields={fields}
+              values={formState}
+              onChange={handleChange}
+              onSubmit={handleSubmit}
+              submitLabel={editingId ? 'Update owner' : 'Create owner'}
+              isEditing={Boolean(editingId)}
+              onCancel={resetForm}
+              submitLoading={isSaving}
+            />
+          </div>
+          <form method="dialog" className="modal-backdrop" onClick={resetForm}></form>
+        </div>
+      )}
       <EntityTable
         columns={columns}
-        data={items}
+        data={filteredItems}
         loading={loading}
         onEdit={handleEdit}
-        onDelete={handleDelete}
+        onDelete={requestDelete}
         emptyMessage="No owners recorded yet."
       />
+
+      {deleteModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/40" onClick={cancelDelete} />
+          <div className="relative z-10 w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
+            <h3 className="text-lg font-semibold text-slate-800 mb-2">Confirm deletion</h3>
+            <p className="text-sm text-slate-600">
+              Are you sure you want to delete {deleteModal.name}? This action cannot be undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" className="btn btn-ghost" onClick={cancelDelete}>Cancel</button>
+              <button type="button" className="btn btn-error" onClick={confirmDelete}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

@@ -1,7 +1,7 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import EntityTable from '../components/EntityTable.jsx';
-import useEntityApi from '../hooks/useEntityApi.js';
+import api from '../api/client.js';
 
 const currencyFormatter = new Intl.NumberFormat('en-LK', { style: 'currency', currency: 'LKR' });
 
@@ -58,8 +58,29 @@ const buildPaymentMeta = (appointment) => {
 
 const AppointmentsHistoryPage = () => {
   const navigate = useNavigate();
-  const { items, loading, error, deleteItem } = useEntityApi('appointments');
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const location = useLocation();
+  const [paymentFilter, setPaymentFilter] = useState(() => (location?.state?.paymentFilter ? location.state.paymentFilter : 'all'));
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  useEffect(() => {
+    // clear location state after consuming to avoid persistent filtering when navigating back
+    if (location?.state && location.state.paymentFilter) {
+      try {
+        navigate(location.pathname, { replace: true });
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [location, navigate]);
   const [expandedAppointment, setExpandedAppointment] = useState(null);
 
   const columns = useMemo(
@@ -156,53 +177,66 @@ const AppointmentsHistoryPage = () => {
     [navigate]
   );
 
-  const handleDelete = useCallback((id) => deleteItem(id), [deleteItem]);
+  const [deleteCandidate, setDeleteCandidate] = useState(null);
 
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-  const filteredAppointments = useMemo(() => {
-    const sorted = [...items].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const loadAppointments = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.get('/appointments', {
+        params: {
+          q: searchQuery || undefined,
+          paymentType: paymentFilter !== 'all' ? paymentFilter : undefined,
+          dateFrom: dateFrom || undefined,
+          dateTo: dateTo || undefined,
+          page,
+          perPage,
+        },
+      }).then((r) => r.data);
 
-    if (!normalizedQuery) {
-      return sorted;
+      const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+      setItems(rows);
+      setTotalRecords(Number(res?.total) || rows.length);
+      setTotalPages(Number(res?.last_page) || 1);
+    } catch (e) {
+      setError(e.message || 'Failed to load appointments.');
+      setItems([]);
+      setTotalRecords(0);
+      setTotalPages(1);
+    } finally {
+      setLoading(false);
     }
+  }, [page, perPage, paymentFilter, searchQuery, dateFrom, dateTo]);
 
-    return sorted.filter((appointment) => {
-      const haystacks = [
-        appointment.reason,
-        appointment.status,
-        appointment.patient?.name,
-        appointment.patient?.owner?.firstName,
-        appointment.patient?.owner?.lastName,
-        appointment.veterinarian
-          ? `${appointment.veterinarian.firstName} ${appointment.veterinarian.lastName}`
-          : '',
-        appointment.notes,
-        appointment.discount,
-        appointment.paymentType,
-        appointment.paymentStatus
-      ];
+  useEffect(() => {
+    loadAppointments();
+  }, [loadAppointments]);
 
-      const medicineLabels = Array.isArray(appointment.medicines)
-        ? appointment.medicines.map((medicine) => {
-            const names = [];
-            if (medicine.brand?.medicine?.name) {
-              names.push(medicine.brand.medicine.name);
-            }
-            if (medicine.brand?.name) {
-              names.push(medicine.brand.name);
-            }
-            return names.join(' ');
-          })
-        : [];
+  const requestDelete = useCallback((id) => {
+    setDeleteCandidate(id);
+  }, []);
 
-      const combined = [...haystacks, ...medicineLabels]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
+  const confirmDelete = useCallback(async () => {
+    if (!deleteCandidate) return;
+    await api.delete(`/appointments/${deleteCandidate}`);
+    await loadAppointments();
+    // close candidate after deletion
+    setDeleteCandidate(null);
+    // also close expanded details if it was the one being deleted
+    setExpandedAppointment((prev) => (prev && prev.id === deleteCandidate ? null : prev));
+  }, [deleteCandidate, loadAppointments]);
 
-      return combined.includes(normalizedQuery);
-    });
-  }, [items, normalizedQuery]);
+  const cancelDelete = useCallback(() => setDeleteCandidate(null), []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, paymentFilter, perPage, dateFrom, dateTo]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const handleCloseModal = () => {
     setExpandedAppointment(null);
@@ -217,9 +251,9 @@ const AppointmentsHistoryPage = () => {
         <p className="text-sm text-slate-500">Review past and upcoming visits, adjust entries, or clear outdated records.</p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <Link to="/appointments" className="btn btn-primary btn-sm">
+        {/* <Link to="/appointments" className="btn btn-primary btn-sm">
           Schedule appointment
-        </Link>
+        </Link> */}
         <div className="relative flex-1 min-w-[260px]">
           <input
             type="search"
@@ -230,6 +264,47 @@ const AppointmentsHistoryPage = () => {
           />
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
         </div>
+        <div>
+          <select
+            value={paymentFilter}
+            onChange={(e) => setPaymentFilter(e.target.value)}
+            className="select select-sm"
+            aria-label="Filter by payment type"
+          >
+            <option value="all">All payments</option>
+            <option value="cash">Cash</option>
+            <option value="credit">Credit</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1 text-xs text-slate-500 whitespace-nowrap">
+            From
+            <input
+              type="date"
+              className="input input-sm input-bordered"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+            />
+          </label>
+          <label className="flex items-center gap-1 text-xs text-slate-500 whitespace-nowrap">
+            To
+            <input
+              type="date"
+              className="input input-sm input-bordered"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+            />
+          </label>
+          {(dateFrom || dateTo) && (
+            <button
+              type="button"
+              className="btn btn-xs btn-ghost text-slate-500"
+              onClick={() => { setDateFrom(''); setDateTo(''); }}
+            >
+              ✕ Clear dates
+            </button>
+          )}
+        </div>
       </div>
       {error && (
         <div className="alert alert-error shadow-sm">
@@ -238,15 +313,33 @@ const AppointmentsHistoryPage = () => {
       )}
       <EntityTable
         columns={columns}
-        data={filteredAppointments}
+        data={items}
         loading={loading}
         onEdit={handleEdit}
-        onDelete={handleDelete}
+        onDelete={requestDelete}
         emptyMessage="No appointments recorded yet."
+        enableSearch={false}
       />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <select
+            className="select select-sm select-bordered"
+            value={perPage}
+            onChange={(e) => setPerPage(Number(e.target.value) || 10)}
+          >
+            {[10, 20, 50].map((size) => <option key={size} value={size}>{size} / page</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-slate-600">
+          <span>{totalRecords} record(s)</span>
+          <button className="btn btn-xs btn-outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Prev</button>
+          <span>Page {page} / {totalPages}</span>
+          <button className="btn btn-xs btn-outline" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
+        </div>
+      </div>
       {expandedAppointment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-base-300 bg-base-100 p-6 shadow-2xl">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4">
+          <div className="relative z-[10000] max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-base-300 bg-base-100 p-6 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-xl font-semibold text-slate-800">Appointment details</h2>
@@ -305,6 +398,18 @@ const AppointmentsHistoryPage = () => {
                       </dd>
                     </div>
                     <div className="flex items-center justify-between">
+                      <dt>Surgery charge</dt>
+                      <dd className="font-medium text-slate-800">
+                        {formatCharge(expandedAppointment.surgeryCharge ?? expandedAppointment.surgery_charge ?? 0)}
+                      </dd>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <dt>Other/service charge</dt>
+                      <dd className="font-medium text-slate-800">
+                        {formatCharge(expandedAppointment.otherCharge ?? expandedAppointment.other_charge ?? 0)}
+                      </dd>
+                    </div>
+                    <div className="flex items-center justify-between">
                       <dt>Medicine subtotal</dt>
                       <dd className="font-medium text-slate-800">
                         {formatCharge(expandedAppointment.medicinesTotal ?? expandedAppointment.totalMedicines ?? 0)}
@@ -356,7 +461,7 @@ const AppointmentsHistoryPage = () => {
                           labelParts.push(item.brand.name);
                         }
                         const label = labelParts.length ? labelParts.join(' — ') : 'Unknown brand';
-                        const quantity = Number.parseInt(item.quantity, 10) || 0;
+                        const quantity = Number.parseFloat(item.quantity) || 0;
                         return (
                           <li key={item.id} className="flex justify-between gap-3">
                             <span>{label}</span>
@@ -391,13 +496,26 @@ const AppointmentsHistoryPage = () => {
                   type="button"
                   className="btn btn-sm btn-error"
                   onClick={() => {
-                    handleDelete(expandedAppointment.id);
+                    requestDelete(expandedAppointment.id);
                     handleCloseModal();
                   }}
                 >
                   Delete appointment
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {deleteCandidate && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/40" onClick={cancelDelete} />
+          <div className="relative z-[10000] w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
+            <h3 className="text-lg font-semibold mb-3">Confirm deletion</h3>
+            <p className="text-sm text-slate-600 mb-4">Are you sure you want to delete this appointment? This action cannot be undone.</p>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn btn-ghost" onClick={cancelDelete}>Cancel</button>
+              <button type="button" className="btn btn-error" onClick={confirmDelete}>Delete</button>
             </div>
           </div>
         </div>

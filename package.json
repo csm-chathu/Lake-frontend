@@ -2,29 +2,78 @@
     "name": "vet-frontend",
     "version": "0.1.0",
     "private": true,
+    "description": "VetFinal desktop client",
+    "author": "Your Name <you@example.com>",
+    "main": "electron-main.cjs",
     "type": "module",
     "scripts": {
-        "dev": "vite",
-        "build": "vite build",
+        "dev": "concurrently \"vite\" \"electron .\"",
+        "prebuild": "node scripts/clean.cjs",
+        "build": "npm run prebuild && vite build",
         "preview": "vite preview",
-        "lint": "eslint src --ext jsx,js --max-warnings=0"
+        "lint": "eslint src --ext jsx,js --max-warnings=0",
+        "postinstall": "electron-builder install-app-deps",
+        "dist": "npm run build && cross-env ELECTRON_BUILDER_SKIP_WIN_CODE_SIGN=true electron-builder"
     },
     "dependencies": {
+        "@tanstack/react-query": "^5.90.21",
         "axios": "^1.6.7",
+        "jsbarcode": "^3.12.3",
         "react": "^18.2.0",
+        "react-datepicker": "^9.1.0",
         "react-dom": "^18.2.0",
-        "react-router-dom": "^6.22.1"
+        "react-router-dom": "^6.22.1",
+        "recharts": "^3.7.0"
+    },
+    "build": {
+        "appId": "com.vetfinal.app",
+        "productName": "VetFinal",
+        "files": [
+            "dist/**/*",
+            "electron-main.cjs",
+            "preload.js",
+            "start-backend.cjs",
+            ".env",
+            "../backend-laravel/app/**/*",
+            "../backend-laravel/bootstrap/**/*",
+            "../backend-laravel/config/**/*",
+            "../backend-laravel/database/**/*",
+            "../backend-laravel/public/**/*",
+            "../backend-laravel/resources/**/*",
+            "../backend-laravel/routes/**/*",
+            "../backend-laravel/artisan",
+            "../backend-laravel/.env",
+            "../backend-laravel/composer.json",
+            "../backend-laravel/vendor/**/*",
+            "mysql/**/*"
+        ],
+        "directories": {
+            "buildResources": "build"
+        },
+        "win": {
+            "target": "nsis",
+            "sign": false
+        },
+        "mac": {
+            "target": "dmg"
+        }
     },
     "devDependencies": {
         "@vitejs/plugin-react": "^4.2.1",
+        "autoprefixer": "^10.4.16",
+        "concurrently": "^8.2.2",
+        "cross-env": "^10.1.0",
+        "daisyui": "^4.12.10",
+        "electron": "26.0.0",
+        "electron-builder": "24.13.3",
         "eslint": "^8.55.0",
         "eslint-config-prettier": "^9.1.0",
         "eslint-plugin-react": "^7.33.2",
         "eslint-plugin-react-hooks": "^4.6.0",
-        "vite": "^5.0.10",
-        "tailwindcss": "^3.4.13",
+        "png-to-ico": "^3.0.1",
         "postcss": "^8.4.31",
-        "autoprefixer": "^10.4.16",
-        "daisyui": "^4.12.10"
+        "rimraf": "^5.0.0",
+        "tailwindcss": "^3.4.13",
+        "vite": "^5.0.10"
     }
 }
