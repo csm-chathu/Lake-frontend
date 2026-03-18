@@ -10,27 +10,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout the code from GitHub
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2. Set up Node.js environment
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
+      # 3. Install dependencies
       - name: Install dependencies
         run: npm ci || npm install
 
+      # 4. Build the project (creates the /dist folder)
       - name: Build
         run: npm run build
 
-      - name: Deploy to Namecheap via Rsync
-        uses: Burnett01/rsync-deployments@7.0.0
+      # 5. Deploy to Namecheap via SSH/Rsync
+      # This uses the SSH key you verified in your terminal
+      - name: Deploy to Server
+        uses: easingthemes/ssh-deploy@main
         with:
-          switches: -avzr --delete
-          path: ./dist/
-          remote_path: /home/lmucunal/public_html
-          remote_host: ${{ secrets.FTP_HOST }}       # Matched to your screenshot
-          remote_user: ${{ secrets.FTP_USERNAME }}   # Matched to your screenshot
-          remote_port: 21098
-          remote_key: ${{ secrets.SSH_PRIVATE_KEY }} # Matched to your screenshot
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          ARGS: "-rlgoDzvc -i --delete"
+          SOURCE: "dist/"
+          REMOTE_HOST: ${{ secrets.FTP_HOST }}
+          REMOTE_USER: ${{ secrets.FTP_USERNAME }}
+          REMOTE_PORT: 22 # Trying standard port 22; if it fails, change to 21098
+          TARGET: "/home/lmucunal/public_html"
+          EXCLUDE: "/dist/, /node_modules/"
