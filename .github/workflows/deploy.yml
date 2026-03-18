@@ -10,11 +10,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout the code from GitHub
+      # 1. Checkout your code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Set up Node.js environment
+      # 2. Setup Node environment
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
@@ -24,20 +24,19 @@ jobs:
       - name: Install dependencies
         run: npm ci || npm install
 
-      # 4. Build the project (creates the /dist folder)
+      # 4. Build your project
       - name: Build
         run: npm run build
 
-      # 5. Deploy to Namecheap via SSH/Rsync
-      # This uses the SSH key you verified in your terminal
-      - name: Deploy to Server
-        uses: easingthemes/ssh-deploy@main
+      # 5. Deploy via FTP
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@4.3.0
         with:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          ARGS: "-rlgoDzvc -i --delete"
-          SOURCE: "dist/"
-          REMOTE_HOST: ${{ secrets.FTP_HOST }}
-          REMOTE_USER: ${{ secrets.FTP_USERNAME }}
-          REMOTE_PORT: 22 # Trying standard port 22; if it fails, change to 21098
-          TARGET: "/home/lmucunal/public_html"
-          EXCLUDE: "/dist/, /node_modules/"
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: 21
+          local-dir: ./dist/
+          # Leave server-dir empty ('') because cPanel usually maps 
+          # dedicated FTP accounts directly to the correct folder.
+          server-dir: ./
