@@ -10,39 +10,33 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout code
+      # 1. Checkout your code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Setup Node
+      # 2. Setup Node environment
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      # Install dependencies
+      # 3. Install dependencies
       - name: Install dependencies
         run: npm ci || npm install
 
-      # Build project
+      # 4. Build your project
       - name: Build
         run: npm run build
 
-      # Debug (optional, shows build output)
-      - name: Show build output
-        run: |
-          echo "Root files:"
-          ls -la
-          echo "Dist output:"
-          ls -la dist || echo "dist folder missing"
-
-      # Deploy to Namecheap cPanel FTP
-      - name: Deploy to Namecheap via FTP
+      # 5. Deploy via FTP
+      - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@4.3.0
         with:
           server: ${{ secrets.FTP_HOST }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftp
-          local-dir: dist/
-          server-dir: ${{ secrets.FTP_DEST }}
+          port: 21
+          local-dir: ./dist/
+          # Leave server-dir empty ('') because cPanel usually maps 
+          # dedicated FTP accounts directly to the correct folder.
+          server-dir: ./
