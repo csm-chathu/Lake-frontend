@@ -10,40 +10,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Setup Node
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      # 3. Install dependencies
       - name: Install dependencies
         run: npm ci || npm install
 
-      # 4. Build project
       - name: Build
         run: npm run build
 
-      # 5. Debug (Ensure the 'dist' folder actually exists)
-      - name: Show build output
-        run: |
-          echo "Current directory:"
-          ls -la
-          echo "Checking for dist folder:"
-          ls -la dist || echo "ERROR: dist folder was not created!"
-
-      # 6. Deploy to Namecheap via Rsync
       - name: Deploy to Namecheap via Rsync
         uses: Burnett01/rsync-deployments@7.0.0
         with:
           switches: -avzr --delete
           path: ./dist/
           remote_path: /home/lmucunal/public_html
-          remote_host: ${{ secrets.SFTP_HOST }}
-          remote_user: ${{ secrets.SFTP_USERNAME }}
+          remote_host: ${{ secrets.FTP_HOST }}       # Matched to your screenshot
+          remote_user: ${{ secrets.FTP_USERNAME }}   # Matched to your screenshot
           remote_port: 21098
-          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          remote_key: ${{ secrets.SSH_PRIVATE_KEY }} # Matched to your screenshot
