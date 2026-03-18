@@ -71,6 +71,10 @@ export default function BrandModal({
   };
 
   const handleDone = () => {
+    // Save brand changes before closing modal
+    if (onSave) {
+      onSave(index, brand);
+    }
     onCancel();
   };
 
