@@ -32,6 +32,6 @@ jobs:
           ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 21098
           local_path: './dist/*'
-          remote_path: '/home/lmucunal/public_html'
+          remote_path: '/home/lmucunal/demo.lmuc-innovations.com'
           # RSA is more standard, so we don't need the extra pubkey args here
           args: '-o StrictHostKeyChecking=no'
