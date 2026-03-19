@@ -28,15 +28,14 @@ jobs:
       - name: Build
         run: npm run build
 
-      # 5. Deploy via FTP
-      - name: Deploy via FTP
-        uses: SamKirkland/FTP-Deploy-Action@4.3.0
+# 5. Deploy via SFTP (Much more reliable for Namecheap)
+      - name: Deploy via SFTP
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
-          server: ${{ secrets.FTP_HOST }}
           username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          port: 21
-          local-dir: ./dist/
-          # Leave server-dir empty ('') because cPanel usually maps 
-          # dedicated FTP accounts directly to the correct folder.
-          server-dir: ./
+          server: ${{ secrets.FTP_HOST }}
+          port: 21098 # Use the port that worked in your terminal
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          local_path: './dist/*'
+          remote_path: '/home/lmucunal/public_html' # Adjust this to your actual server path
+          args: '-o ConnectTimeout=5'
