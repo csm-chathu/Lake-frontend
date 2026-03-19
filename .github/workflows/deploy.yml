@@ -8,7 +8,6 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -23,6 +22,28 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # --- DEBUGGING START ---
+      - name: Logpoint - Inspect SSH Key & Connection
+        run: |
+          echo "Checking key status..."
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+            echo "ERROR: SSH_PRIVATE_KEY secret is EMPTY!"
+            exit 1
+          fi
+          
+          # Check for valid headers
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | head -n 1
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | tail -n 1
+          
+          # Create a temp key file to test connection
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          
+          echo "Testing connection to Namecheap (Port 21098)..."
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_deploy -p 21098 ${{ secrets.FTP_USERNAME }}@${{ secrets.FTP_HOST }} "ls -la public_html" || echo "SSH Connection Failed"
+      # --- DEBUGGING END ---
 
       - name: Deploy via SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
