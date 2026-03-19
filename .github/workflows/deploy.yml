@@ -3,41 +3,41 @@ name: Build and Deploy to Namecheap
 on:
   push:
     branches:
-      - main
+      - main  # Trigger on pushes to the main branch
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    
     steps:
-      # 1. Checkout your code
+      # 1. Pull the latest code from your repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Setup Node environment
+      # 2. Set up the Node.js environment
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      # 3. Install dependencies
+      # 3. Install project dependencies
       - name: Install dependencies
         run: npm ci || npm install
 
-      # 4. Build your project
-      # This creates the /dist folder
+      # 4. Build the production files (creates the /dist folder)
       - name: Build
         run: npm run build
 
-      # 5. Deploy via SFTP
-      # SFTP is much more stable than FTP for Namecheap
+      # 5. Deploy via SFTP (Secure File Transfer)
+      # This is much more reliable for Namecheap than standard FTP.
       - name: Deploy via SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
-          username: ${{ secrets.FTP_USERNAME }}
-          server: ${{ secrets.FTP_HOST }}
-          port: 21098
+          server: ${{ secrets.FTP_HOST }}       # Example: 198.54.125.205
+          username: ${{ secrets.FTP_USERNAME }} # Your cPanel username (e.g., lmucunal)
           ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-          local_path: './dist/*'
+          port: 21098                           # Standard Namecheap SSH/SFTP port
+          local_path: './dist/*'                # Uploads contents of dist folder
           remote_path: '/home/lmucunal/public_html'
-          # 'args' below skips the manual "trust this host" prompt that hangs GitHub Actions
-          args: '-o StrictHostKeyChecking=no'
+          # args helps prevent "Invalid Format" and "Host Verification" errors
+          args: '-o StrictHostKeyChecking=no -o PubkeyAcceptedKeyTypes=+ssh-ed25519'
