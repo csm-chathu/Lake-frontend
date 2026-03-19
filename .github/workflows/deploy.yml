@@ -8,7 +8,6 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
       # 1. Checkout your code
       - name: Checkout repository
@@ -25,17 +24,20 @@ jobs:
         run: npm ci || npm install
 
       # 4. Build your project
+      # This creates the /dist folder
       - name: Build
         run: npm run build
 
-# 5. Deploy via SFTP (Much more reliable for Namecheap)
+      # 5. Deploy via SFTP
+      # SFTP is much more stable than FTP for Namecheap
       - name: Deploy via SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
           username: ${{ secrets.FTP_USERNAME }}
           server: ${{ secrets.FTP_HOST }}
-          port: 21098 # Use the port that worked in your terminal
+          port: 21098
           ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
           local_path: './dist/*'
-          remote_path: '/home/lmucunal/public_html' # Adjust this to your actual server path
-          args: '-o ConnectTimeout=5'
+          remote_path: '/home/lmucunal/public_html'
+          # 'args' below skips the manual "trust this host" prompt that hangs GitHub Actions
+          args: '-o StrictHostKeyChecking=no'
