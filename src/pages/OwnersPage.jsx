@@ -9,6 +9,13 @@ const emptyOwner = {
   notes: ''
 };
 
+const capitalizeFirstLetter = (string) => {
+  if (typeof string !== 'string' || string.length === 0) {
+    return string;
+  }
+  return string.charAt(0).toUpperCase() + string.slice(1);
+};
+
 const OwnersPage = () => {
   const { items, loading, error, createItem, updateItem, deleteItem } = useEntityApi('owners');
   const [searchQuery, setSearchQuery] = useState('');
@@ -20,30 +27,27 @@ const OwnersPage = () => {
 
   const fields = useMemo(
     () => {
-      const sriLankaPhoneHint = 'Enter 10-digit mobile/landline (e.g. 0771234567) or +94 format.';
       return [
-        { name: 'firstName', label: 'Owner name', placeholder: 'Alex Fernando' },
+        {
+          name: 'firstName',
+          label: 'Owner name',
+          placeholder: 'Alex Fernando',
+          containerClass: 'md:col-span-1',
+        },
         {
           name: 'phone',
-          label: 'Phone',
+          label: 'Phone (e.g. 0771234567)',
           placeholder: '0771234567 or +94771234567',
           pattern: '^(?:0|\\+94)(?:7\\d{8}|11\\d{7}|[1-9]\\d{8})$',
-          render: ({ value, onChange, placeholder, field }) => (
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-slate-600">Phone</span>
-              <input
-                type="tel"
-                value={value || ''}
-                onChange={(event) => onChange(event.target.value)}
-                placeholder={placeholder}
-                pattern={field.pattern}
-                className="input input-bordered"
-              />
-              <span className="text-xs text-slate-500">{sriLankaPhoneHint}</span>
-            </label>
-          )
+          containerClass: 'md:col-span-1',
         },
-        { name: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Preferred schedule, reminders, etc.' }
+        {
+          name: 'notes',
+          label: 'Notes',
+          type: 'textarea',
+          placeholder: 'Preferred schedule, reminders, etc.',
+          containerClass: 'md:col-span-2',
+        }
       ];
     },
     []
@@ -198,7 +202,7 @@ const OwnersPage = () => {
       </div>
 
       {showEditModal && (
-        <div className="modal modal-open">
+        <div className="modal modal-open" style={{marginTop:'0'}}>
           <div className="modal-box w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <button
               type="button"
@@ -217,6 +221,9 @@ const OwnersPage = () => {
               isEditing={Boolean(editingId)}
               onCancel={resetForm}
               submitLoading={isSaving}
+              className="grid grid-cols-1 md:grid-cols-2 gap-4"
+              onClear={() => setFormState(emptyOwner)}
+              clearLabel="Clear"
             />
           </div>
           <form method="dialog" className="modal-backdrop" onClick={resetForm}></form>

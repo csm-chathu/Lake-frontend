@@ -4,6 +4,13 @@ import EntityForm from '../components/EntityForm.jsx';
 import EntityTable from '../components/EntityTable.jsx';
 import useEntityApi from '../hooks/useEntityApi.js';
 
+const capitalizeFirstLetter = (string) => {
+  if (typeof string !== 'string' || string.length === 0) {
+    return string;
+  }
+  return string.charAt(0).toUpperCase() + string.slice(1);
+};
+
 const SPECIES_OPTIONS = [
   'Canine',
   'Feline',
@@ -146,10 +153,28 @@ const PatientsPage = () => {
       );
 
       return [
-        { name: 'name', label: 'Patient name', placeholder: 'Luna' },
+        {
+          name: 'name',
+          label: 'Patient name',
+          placeholder: 'Luna',
+          containerClass: 'md:col-span-6',
+          render: ({ value, onChange, placeholder }) => (
+            <label className="flex flex-col">
+              <span className="text-sm font-medium text-slate-600">Patient name</span>
+              <input
+                type="text"
+                value={value || ''}
+                onChange={(e) => onChange(capitalizeFirstLetter(e.target.value))}
+                placeholder={placeholder}
+                className="input input-sm input-bordered"
+              />
+            </label>
+          )
+        },
         {
           name: 'gender',
           label: 'Gender',
+          containerClass: 'md:col-span-2',
           render: ({ value, onChange }) => (
             <div className="flex flex-col gap-2">
               <span className="text-sm font-medium text-slate-600">Gender</span>
@@ -171,132 +196,136 @@ const PatientsPage = () => {
             </div>
           )
         },
-      {
-        name: 'species',
-        label: 'Species',
-        placeholder: 'Canine',
-        render: ({ value, onChange, placeholder }) => {
-          const currentValue = typeof value === 'string' ? value : '';
-          return (
-            <>
-              <span className="text-sm font-medium text-slate-600">Species</span>
+        {
+          name: 'weight',
+          label: 'Weight (kg)',
+          containerClass: 'md:col-span-2',
+          render: ({ value, onChange }) => (
+            <label className="flex flex-col">
+              <span className="text-sm font-medium text-slate-600">Weight (kg)</span>
               <input
-                type="text"
-                value={currentValue}
-                onChange={(event) => onChange(event.target.value)}
-                placeholder={placeholder}
-                className="input input-bordered"
-                list={speciesDatalistId}
+                type="number"
+                min="0"
+                step="0.01"
+                value={value || ''}
+                onChange={(e) => onChange(e.target.value)}
+                className="input input-sm input-bordered"
+                placeholder="0.0"
               />
-              <datalist id={speciesDatalistId}>
-                {SPECIES_OPTIONS.map((option) => (
-                  <option key={option} value={option} />
-                ))}
-              </datalist>
-              {renderSuggestionButtons(SPECIES_OPTIONS, onChange, currentValue)}
-            </>
-          );
-        }
-      },
-      {
-        name: 'breed',
-        label: 'Breed',
-        placeholder: 'Labrador',
-        render: ({ value, onChange, placeholder }) => {
-          const currentValue = typeof value === 'string' ? value : '';
-          const hasSuggestions = breedSuggestions.length > 0;
-          return (
-            <>
-              <span className="text-sm font-medium text-slate-600">Breed</span>
-              <input
-                type="text"
-                value={currentValue}
-                onChange={(event) => onChange(event.target.value)}
-                placeholder={placeholder}
-                className="input input-bordered"
-                list={breedDatalistId}
-              />
-              <datalist id={breedDatalistId}>
-                {breedSuggestions.map((option) => (
-                  <option key={option} value={option} />
-                ))}
-              </datalist>
-              {hasSuggestions && renderSuggestionButtons(breedSuggestions, onChange, currentValue)}
-            </>
-          );
-        }
-      },
-      {
-        name: 'age',
-        label: 'Age',
-        render: ({ value, onChange }) => {
-          const years = formState.ageYears ?? '';
-          const months = formState.ageMonths ?? '';
-          return (
-            <div className="grid grid-cols-2 gap-2">
-              <label className="flex flex-col">
-                <span className="text-sm font-medium text-slate-600">Years</span>
+            </label>
+          )
+        },
+        {
+          name: 'age',
+          label: 'Age',
+          containerClass: 'md:col-span-2',
+          render: ({ value, onChange }) => {
+            const years = formState.ageYears ?? '';
+            const months = formState.ageMonths ?? '';
+            return (
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col">
+                  <span className="text-sm font-medium text-slate-600">Years</span>
                   <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={years}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/[^0-9]/g, '');
-                    setFormState((prev) => ({ ...prev, ageYears: v }));
-                  }}
-                  placeholder="Years"
-                  className="input input-bordered relative z-30"
-                />
-              </label>
-              <label className="flex flex-col">
-                <span className="text-sm font-medium text-slate-600">Months</span>
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={years}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^0-9]/g, '');
+                      setFormState((prev) => ({ ...prev, ageYears: v }));
+                    }}
+                    placeholder="Years"
+                    className="input input-sm input-bordered"
+                  />
+                </label>
+                <label className="flex flex-col">
+                  <span className="text-sm font-medium text-slate-600">Months</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={months}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^0-9]/g, '');
+                      const nv = v === '' ? '' : String(Math.max(0, Math.min(11, Number(v))));
+                      setFormState((prev) => ({ ...prev, ageMonths: nv }));
+                    }}
+                    placeholder="Months"
+                    className="input input-sm input-bordered"
+                  />
+                </label>
+              </div>
+            );
+          }
+        },
+        {
+          name: 'species',
+          label: 'Species',
+          placeholder: 'Canine',
+          containerClass: 'md:col-span-3',
+          render: ({ value, onChange, placeholder }) => {
+            const currentValue = typeof value === 'string' ? value : '';
+            return (
+              <div className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-slate-600">Species</span>
                 <input
                   type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={months}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/[^0-9]/g, '');
-                    const nv = v === '' ? '' : String(Math.max(0, Math.min(11, Number(v))));
-                    setFormState((prev) => ({ ...prev, ageMonths: nv }));
-                  }}
-                  placeholder="Months"
-                  className="input input-bordered relative z-30"
+                  value={currentValue}
+                  onChange={(event) => onChange(capitalizeFirstLetter(event.target.value))}
+                  placeholder={placeholder}
+                  className="input input-sm input-bordered"
+                  list={speciesDatalistId}
                 />
-              </label>
-            </div>
-          );
-        }
-      },
-      {
-        name: 'weight',
-        label: 'Weight (kg)',
-        render: ({ value, onChange }) => (
-          <label className="form-control w-full">
-            <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-600">Weight (kg)</span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={value || ''}
-              onChange={(e) => onChange(e.target.value)}
-              className="input input-bordered"
-              placeholder="0.0"
-            />
-          </label>
-        )
-      },
-      {
-        name: 'ownerId',
-        label: 'Owner',
-        render: ({ value, onChange }) => {
-          const currentValue = value || '';
-          const hasOwners = ownerOptions.length > 0;
-          return (
-            <>
-              <span className="text-sm font-medium text-slate-600">Owner</span>
+                <datalist id={speciesDatalistId}>
+                  {SPECIES_OPTIONS.map((option) => (
+                    <option key={option} value={option} />
+                  ))}
+                </datalist>
+                {renderSuggestionButtons(SPECIES_OPTIONS, onChange, currentValue)}
+              </div>
+            );
+          }
+        },
+        {
+          name: 'breed',
+          label: 'Breed',
+          placeholder: 'Labrador',
+          containerClass: 'md:col-span-3',
+          render: ({ value, onChange, placeholder }) => {
+            const currentValue = typeof value === 'string' ? value : '';
+            const hasSuggestions = breedSuggestions.length > 0;
+            return (
               <div className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-slate-600">Breed</span>
+                <input
+                  type="text"
+                  value={currentValue}
+                  onChange={(event) => onChange(capitalizeFirstLetter(event.target.value))}
+                  placeholder={placeholder}
+                  className="input input-sm input-bordered"
+                  list={breedDatalistId}
+                />
+                <datalist id={breedDatalistId}>
+                  {breedSuggestions.map((option) => (
+                    <option key={option} value={option} />
+                  ))}
+                </datalist>
+                {hasSuggestions && renderSuggestionButtons(breedSuggestions, onChange, currentValue)}
+              </div>
+            );
+          }
+        },
+        {
+          name: 'ownerId',
+          label: 'Owner',
+          containerClass: 'md:col-span-6',
+          render: ({ value, onChange }) => {
+            const currentValue = value || '';
+            const hasOwners = ownerOptions.length > 0;
+            return (
+              <div className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-slate-600">Owner</span>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <select
                     value={currentValue}
@@ -304,7 +333,7 @@ const PatientsPage = () => {
                       setOwnerCreationError('');
                       onChange(event.target.value);
                     }}
-                    className="select select-bordered w-full sm:flex-1"
+                    className="select select-bordered select-sm w-full sm:flex-1"
                   >
                     <option value="">
                       {hasOwners ? 'Select owner' : 'No owners yet'}
@@ -411,13 +440,29 @@ const PatientsPage = () => {
                   </div>
                 )}
               </div>
-            </>
-          );
-        }
-      },
-      { name: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Allergies, behavior, etc.' }
-      ];
-    },
+            );
+          }
+        },
+        {
+        name: 'notes',
+        label: 'Notes',
+        type: 'textarea',
+        placeholder: 'Allergies, behavior, etc.',
+        containerClass: 'md:col-span-6',
+        render: ({ value, onChange, placeholder }) => (
+          <label className="flex flex-col">
+            <span className="text-sm font-medium text-slate-600">Notes</span>
+            <textarea
+              value={value || ''}
+              onChange={(e) => onChange(capitalizeFirstLetter(e.target.value))}
+              placeholder={placeholder}
+              className="textarea textarea-bordered textarea-sm"
+              rows={3}
+            />
+          </label>
+        )
+      }
+      ];    },
     [
       ownerOptions,
       formState.species,
@@ -725,14 +770,34 @@ const PatientsPage = () => {
               isEditing={Boolean(editingId)}
               onCancel={resetForm}
               submitLoading={isSaving}
-              showCancel={true}
+              className="grid grid-cols-1 md:grid-cols-6 gap-4"
+              onClear={() => setFormState(emptyPatient)}
+              clearLabel="Clear form"
             />
           </div>
           <form method="dialog" className="modal-backdrop" onClick={resetForm}></form>
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-2">
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search patients, passbook, owner..."
+            className="input input-sm input-bordered w-full max-w-md"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={() => setSearchQuery('')}
+            >
+              Clear
+            </button>
+          )}
+        </div>
         <button
           type="button"
           className="btn btn-sm btn-primary"
@@ -744,15 +809,6 @@ const PatientsPage = () => {
         >
           + Add new patient
         </button>
-        <div>
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search patients, passbook, owner..."
-            className="input input-sm input-bordered w-full max-w-md"
-          />
-        </div>
       </div>
 
       <EntityTable

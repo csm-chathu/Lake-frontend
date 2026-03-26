@@ -85,8 +85,8 @@ const EntityTable = ({
           />
         </div>
       )}
-      <div className={`${bodyMaxHeightClass} overflow-y-auto`}>
-        <table className="table table-lg w-full">
+      <div className={`${bodyMaxHeightClass} overflow-auto`}>
+        <table className="table w-full">
           <thead className="sticky top-0 z-10 bg-base-200/90 backdrop-blur">
             <tr>
               {columns.map((column) => (

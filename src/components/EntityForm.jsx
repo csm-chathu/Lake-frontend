@@ -7,11 +7,22 @@ const EntityForm = ({
   submitLabel = 'Save',
   isEditing,
   onCancel,
+  showCancel,
+  onClear,
+  clearLabel = 'Clear',
   footerRight,
   showSubmit = true,
   submitLoading = false,
-  preventSubmitOnEnter = false
-}) => (
+  preventSubmitOnEnter = false,
+  className
+}) => {
+  const formClassName = className || "grid gap-4 md:grid-cols-3";
+  const colMatch = formClassName.match(/md:grid-cols-(\d+)/);
+  const gridCols = colMatch ? parseInt(colMatch[1], 10) : 3;
+  const fullWidthColSpanClass = `md:col-span-${gridCols}`;
+
+
+  return (
   <section className="rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm">
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
       <h2 className="text-xl font-semibold text-slate-800">{title}</h2>
@@ -22,7 +33,7 @@ const EntityForm = ({
       )}
     </div>
     <form
-      className="grid gap-4 md:grid-cols-3"
+      className={formClassName}
       onSubmit={onSubmit}
       onKeyDown={(event) => {
         if (!preventSubmitOnEnter) {
@@ -60,7 +71,7 @@ const EntityForm = ({
         } = field;
         const value = values[name] ?? '';
 
-        const baseContainerClass = fullWidth ? 'md:col-span-3 flex flex-col gap-2' : 'flex flex-col gap-2';
+        const baseContainerClass = fullWidth ? `${fullWidthColSpanClass} flex flex-col gap-2` : 'flex flex-col gap-2';
         const containerClass = `${baseContainerClass} ${customContainerClass}`.trim();
 
         if (typeof render === 'function') {
@@ -81,7 +92,7 @@ const EntityForm = ({
 
         if (type === 'textarea') {
           return (
-            <label key={name} className="md:col-span-3 flex flex-col gap-2">
+            <label key={name} className={containerClass}>
               <span className="text-sm font-medium text-slate-600">{label}</span>
               <textarea
                 name={name}
@@ -138,27 +149,45 @@ const EntityForm = ({
           </label>
         );
       })}
-      <div className="md:col-span-3 flex items-center justify-between">
-        <div>{footerRight || null}</div>
+      <div className={`${fullWidthColSpanClass} flex items-center justify-end gap-2`}>
+        {footerRight || null}
+        {showCancel && onCancel && (
+            <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={onCancel}
+            >
+                Cancel
+            </button>
+        )}
+        {onClear && (
+            <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={onClear}
+            >
+                {clearLabel}
+            </button>
+        )}
         {showSubmit ? (
-          <button
+        <button
             type="submit"
             className="btn btn-primary px-6 gap-2"
             disabled={submitLoading}
-          >
+        >
             {submitLoading ? (
-              <>
+            <>
                 <span className="loading loading-spinner loading-sm" aria-hidden="true" />
                 <span>Saving...</span>
-              </>
+            </>
             ) : (
-              submitLabel
+            submitLabel
             )}
-          </button>
+        </button>
         ) : null}
       </div>
     </form>
   </section>
 );
-
+}
 export default EntityForm;

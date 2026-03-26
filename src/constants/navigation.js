@@ -6,7 +6,8 @@ export const doctorNavItems = [
   { to: '/sales/history', label: 'Sales History', end: true, icon: '🧮' },
   { to: '/patients', label: 'Manage Patients', icon: '🐾' },
   { to: '/owners', label: 'Manage Owners', icon: '👥' },
-  { to: '/medicines', label: 'Medicines & Stock', icon: '💊' },
+  { to: '/medicines', label: 'Medicines', icon: '💊' },
+  
   { to: '/suppliers', label: 'Suppliers', icon: '🏭' },
   { to: '/employees', label: 'Employee Management', icon: '🧑‍💼' },
   { to: '/sms-logs', label: 'SMS Logs', icon: '✉️' },
@@ -15,8 +16,9 @@ export const doctorNavItems = [
   { to: '/procurement/goods-receipts', label: 'Goods Receipts (GRN)', icon: '📥' },
   { to: '/procurement/supplier-invoices', label: 'Supplier Invoices', icon: '🧮' },
   { to: '/procurement/supplier-credit-notes', label: 'Credit Notes', icon: '↩️' },
+  { to: '/income-expense', label: 'Income & Expense', icon: '💰' },
   { to: '/reports', label: 'Reports & Summary', end: true, icon: '📋' },
-  { to: '/settings', label: 'Settings', icon: '⚙️' }
+  { to: '/settings', label: 'Settings', icon: '⚙️' },
 ];
 
 export const cashierNavItems = [
@@ -30,6 +32,7 @@ export const cashierNavItems = [
   { to: '/medicines', label: 'Medicines & Stock', icon: '💊' },
   { to: '/billing/day-end', label: 'Sales Day-End Close', icon: '🏦' },
   { to: '/procurement/supplier-invoices', label: 'Supplier Invoices', icon: '🧮' },
+  { to: '/income-expense', label: 'Income & Expense', icon: '💰' },
   { to: '/reports', label: 'Reports & Summary', end: true, icon: '📋' }
 ];
 

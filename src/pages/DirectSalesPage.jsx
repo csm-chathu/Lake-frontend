@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AppointmentMedicineSelector, { calculateMedicinesTotal } from '../components/AppointmentMedicineSelector.jsx';
 import InvoicePrintModal from '../components/InvoicePrintModal.jsx';
 import useEntityApi from '../hooks/useEntityApi.js';
+import { useClinicSettings } from '../context/ClinicSettingsContext.jsx';
 
 const currencyFormatter = new Intl.NumberFormat('en-LK', { style: 'currency', currency: 'LKR' });
 const DISCOUNT_PRESETS = [10, 20, 30, 40];
@@ -18,13 +19,16 @@ const createEmptySale = () => ({
   saleRef: generateSaleReference(),
   medicines: [],
   discount: '',
+  serviceCharge: '',
   paymentType: 'cash',
   paymentStatus: 'paid'
 });
 
 const DirectSalesPage = () => {
+  const { settings } = useClinicSettings();
   const directSalesApi = useEntityApi('direct-sales');
-  const medicinesApi = useEntityApi('medicines');
+  // Only fetch items with type 'item' for direct sale
+  const medicinesApi = useEntityApi('medicines', { type: 'item' });
 
   const { createItem: createDirectSale, error: directSalesError, refresh: refreshDirectSales } = directSalesApi;
   const { items: medicines, loading: medicinesLoading, error: medicinesError } = medicinesApi;
@@ -101,7 +105,8 @@ const DirectSalesPage = () => {
     ? 0
     : Math.min(100, Math.max(0, rawDiscountPercent));
   const discountAmount = Number(((medicinesTotal * discountPercent) / 100).toFixed(2));
-  const finalTotal = Math.max(0, medicinesTotal - discountAmount);
+  const serviceCharge = Number.parseFloat(formState.serviceCharge) || 0;
+  const finalTotal = Math.max(0, medicinesTotal - discountAmount + serviceCharge);
 
   const barcodeLookup = useMemo(() => {
     const lookup = new Map();
@@ -258,6 +263,10 @@ const DirectSalesPage = () => {
       paymentStatus: formState.paymentType === 'credit' ? formState.paymentStatus : 'paid'
     };
 
+    if (settings.shop_type === 'spare') {
+        payload.serviceCharge = serviceCharge;
+    }
+
     setIsSaving(true);
     try {
       const result = await createDirectSale(payload);
@@ -284,9 +293,10 @@ const DirectSalesPage = () => {
             doctorCharge: 0,
             surgeryCharge: 0,
             otherCharge: 0,
+            serviceCharge: settings.shop_type === 'spare' ? serviceCharge : 0,
             medicinesSubtotal: medicinesTotal,
             discount: discountAmount,
-            estimated: Number(Math.max(medicinesTotal - discountAmount, 0).toFixed(2)),
+            estimated: Number(Math.max(medicinesTotal - discountAmount + (settings.shop_type === 'spare' ? serviceCharge : 0), 0).toFixed(2)),
             patientName: referenceName,
             appointmentId: null,
             medicines: result.data?.items || formState.medicines || [],
@@ -461,6 +471,21 @@ const DirectSalesPage = () => {
                 />
               </label>
 
+              {settings.shop_type === 'spare' && (
+                  <label className="form-control w-full">
+                      <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-600">Service Charge</span>
+                      <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="input input-bordered input-sm"
+                          value={formState.serviceCharge}
+                          onChange={(event) => handleChange('serviceCharge', event.target.value)}
+                          placeholder="0.00"
+                      />
+                  </label>
+              )}
+
 
               <label className="form-control w-full">
                 <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-600">Payment type</span>
@@ -513,7 +538,7 @@ const DirectSalesPage = () => {
               })}
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <div className="rounded-xl bg-sky-500 p-3 flex flex-col gap-1">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-sky-100">Items total</span>
                 <span className="text-base font-bold text-white">{currencyFormatter.format(medicinesTotal)}</span>
@@ -523,6 +548,12 @@ const DirectSalesPage = () => {
                 <span className="text-base font-bold text-white">-{currencyFormatter.format(discountAmount)}</span>
                 <span className="text-[10px] font-semibold text-amber-100">{discountPercent}%</span>
               </div>
+              {settings.shop_type === 'spare' && (
+                <div className="rounded-xl bg-purple-500 p-3 flex flex-col gap-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-purple-100">Service Charge</span>
+                  <span className="text-base font-bold text-white">{currencyFormatter.format(serviceCharge)}</span>
+                </div>
+              )}
               <div className="rounded-xl bg-emerald-600 p-3 flex flex-col gap-1">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-100">Final total</span>
                 <span className="text-base font-bold text-white flex items-center gap-1">💰 {currencyFormatter.format(finalTotal)}</span>
@@ -542,7 +573,7 @@ const DirectSalesPage = () => {
 
       <InvoicePrintModal
         open={invoiceModal.open}
-        invoice={invoiceModal.data}
+        invoice={{...invoiceModal.data, serviceCharge: settings.shop_type === 'spare' ? serviceCharge : undefined}}
         onClose={closeInvoiceModal}
         currencyFormatter={currencyFormatter}
       />

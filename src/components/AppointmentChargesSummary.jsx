@@ -1,8 +1,16 @@
 import React, { useMemo } from 'react';
+import useEntityApi from '../hooks/useEntityApi.js';
 import { calculateMedicinesTotal } from './AppointmentMedicineSelector.jsx';
 import PaymentFooter from './PaymentFooter.jsx';
 
 const currencyFormatter = new Intl.NumberFormat('en-LK', { style: 'currency', currency: 'LKR' });
+
+const capitalizeFirstLetter = (string) => {
+  if (typeof string !== 'string' || string.length === 0) {
+    return string;
+  }
+  return string.charAt(0).toUpperCase() + string.slice(1);
+};
 
 export default function AppointmentChargesSummary({
   formState,
@@ -10,8 +18,15 @@ export default function AppointmentChargesSummary({
   brandLookup,
   chargePresets = [],
   surgeryChargePresets = [],
+  disposableChargePresets: disposableChargePresetsProp = [],
   paymentStatusOptions = []
 }) {
+  // Load disposable charge presets from API if not provided
+  const { items: disposableChargePresetsApi, loading: disposableLoading } = useEntityApi('disposabal-charge-presets');
+  const disposableChargePresets =
+    Array.isArray(disposableChargePresetsProp) && disposableChargePresetsProp.length
+      ? disposableChargePresetsProp
+      : (Array.isArray(disposableChargePresetsApi) ? disposableChargePresetsApi.filter((p) => p.active !== false) : []);
   // compute derived values locally so callers don't need to already calculate them
   const doctorChargeValue = useMemo(() => {
     const parsed = Number.parseFloat(formState.doctorCharge);
@@ -23,10 +38,17 @@ export default function AppointmentChargesSummary({
     return Number.isNaN(parsed) ? 0 : parsed;
   }, [formState.surgeryCharge]);
 
+
   const serviceChargeValue = useMemo(() => {
     const parsed = Number.parseFloat(formState.otherCharge);
     return Number.isNaN(parsed) ? 0 : parsed;
   }, [formState.otherCharge]);
+
+  // Disposable Charge
+  const disposableChargeValue = useMemo(() => {
+    const parsed = Number.parseFloat(formState.disposableCharge);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }, [formState.disposableCharge]);
 
   const medicinesTotal = useMemo(
     () => calculateMedicinesTotal(formState.medicines || [], brandLookup),
@@ -39,9 +61,9 @@ export default function AppointmentChargesSummary({
   }, [formState.discount]);
 
   const totalChargeEstimate = useMemo(() => {
-    const gross = doctorChargeValue + surgeryChargeValue + serviceChargeValue + medicinesTotal;
+    const gross = doctorChargeValue + surgeryChargeValue + serviceChargeValue + disposableChargeValue + medicinesTotal;
     return Number(Math.max(gross - discountValue, 0).toFixed(2));
-  }, [doctorChargeValue, surgeryChargeValue, serviceChargeValue, medicinesTotal, discountValue]);
+  }, [doctorChargeValue, surgeryChargeValue, serviceChargeValue, disposableChargeValue, medicinesTotal, discountValue]);
 
   const handleChangeField = (name, value) => {
     setFormState((prev) => ({ ...prev, [name]: value }));
@@ -115,6 +137,60 @@ export default function AppointmentChargesSummary({
             </div>
             </div>
 
+            {/* Disposable Charge */}
+            <div className="rounded-lg border border-base-200 bg-base-50 p-4">
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                🧻 Disposable Charge
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                {(() => {
+                  const current = typeof formState.disposableCharge === 'string' ? formState.disposableCharge : '';
+                  const numeric = Number.parseFloat(current) || 0;
+                  const presetsList =
+                    Array.isArray(disposableChargePresets) && disposableChargePresets.length
+                      ? disposableChargePresets
+                      : [
+                          { id: 'd1', label: 'Standard', value: 100 },
+                          { id: 'd2', label: 'Premium', value: 200 },
+                          { id: 'd3', label: 'Custom', value: 0 }
+                        ];
+                  return (
+                    <>
+                      {presetsList.map((preset) => {
+                        const valueNum = Number(preset.value);
+                        const active = Number(valueNum) === Number(numeric);
+                        return (
+                          <button
+                            type="button"
+                            key={preset.id ?? preset.name ?? preset.value}
+                            className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
+                            onClick={() => handleChangeField('disposableCharge', String(preset.value))}
+                          >
+                            {preset.label}
+                            <span className="ml-1 text-xs opacity-70">
+                              {currencyFormatter.format(preset.value)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-slate-500">or</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={current}
+                          onChange={(e) => handleChangeField('disposableCharge', e.target.value)}
+                          placeholder="Custom amount"
+                          className="input input-sm input-bordered w-36"
+                        />
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+
             {/* Other/Service Charge */}
             <div className="rounded-lg border border-base-200 bg-base-50 p-4">
             <label className="mb-2 block text-sm font-semibold text-slate-700">
@@ -133,7 +209,7 @@ export default function AppointmentChargesSummary({
               <input
                 type="text"
                 value={typeof formState.otherChargeReason === 'string' ? formState.otherChargeReason : ''}
-                onChange={(e) => handleChangeField('otherChargeReason', e.target.value)}
+                onChange={(e) => handleChangeField('otherChargeReason', capitalizeFirstLetter(e.target.value))}
                 placeholder="Reason (optional)"
                 className="input input-sm input-bordered flex-1 min-w-[200px]"
               />
@@ -147,7 +223,7 @@ export default function AppointmentChargesSummary({
             </label>
             <div className="flex flex-wrap items-center gap-2">
               {[0, 10, 20, 30, 40, 50].map((pct) => {
-                const gross = doctorChargeValue + surgeryChargeValue + serviceChargeValue + medicinesTotal;
+                const gross = doctorChargeValue + surgeryChargeValue + serviceChargeValue + disposableChargeValue + medicinesTotal;
                 const v = Number(((gross * pct) / 100).toFixed(2));
                 const active = Number(v) === Number(discountValue);
                 return (
@@ -222,56 +298,38 @@ export default function AppointmentChargesSummary({
                 </div>
               )}
 
-            {/* Summary Table */}
-            <div className="rounded-lg border border-base-300 overflow-hidden">
-          <table className="table table-sm w-full">
-            <thead className="bg-base-200">
-              <tr>
-                <th className="text-slate-700">Charge Type</th>
-                <th className="text-right text-slate-700">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="hover:bg-base-50">
-                <td className="text-slate-600">Doctor Charge</td>
-                <td className="text-right font-medium text-slate-800">
-                  {currencyFormatter.format(doctorChargeValue)}
-                </td>
-              </tr>
-              <tr className="hover:bg-base-50">
-                <td className="text-slate-600">Surgery Charge</td>
-                <td className="text-right font-medium text-slate-800">
-                  {currencyFormatter.format(surgeryChargeValue)}
-                </td>
-              </tr>
-              <tr className="hover:bg-base-50">
-                <td className="text-slate-600">Other/Service Charge</td>
-                <td className="text-right font-medium text-slate-800">
-                  {currencyFormatter.format(serviceChargeValue)}
-                </td>
-              </tr>
-              <tr className="hover:bg-base-50">
-                <td className="text-slate-600">Medicines Subtotal</td>
-                <td className="text-right font-medium text-slate-800">
-                  {currencyFormatter.format(medicinesTotal)}
-                </td>
-              </tr>
+            {/* Summary as small colored boxes */}
+            <div className="flex flex-wrap gap-2 my-2">
+              <div className="px-3 py-2 rounded bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold flex-1 min-w-[120px] flex flex-col items-center">
+                <span className="mb-0.5">Doctor</span>
+                <span className="text-base font-bold">{currencyFormatter.format(doctorChargeValue)}</span>
+              </div>
+              <div className="px-3 py-2 rounded bg-purple-50 border border-purple-200 text-purple-900 text-xs font-semibold flex-1 min-w-[120px] flex flex-col items-center">
+                <span className="mb-0.5">Surgery</span>
+                <span className="text-base font-bold">{currencyFormatter.format(surgeryChargeValue)}</span>
+              </div>
+              <div className="px-3 py-2 rounded bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold flex-1 min-w-[120px] flex flex-col items-center">
+                <span className="mb-0.5">Service</span>
+                <span className="text-base font-bold">{currencyFormatter.format(serviceChargeValue)}</span>
+              </div>
+              <div className="px-3 py-2 rounded bg-yellow-50 border border-yellow-200 text-yellow-900 text-xs font-semibold flex-1 min-w-[120px] flex flex-col items-center">
+                <span className="mb-0.5">Disposable</span>
+                <span className="text-base font-bold">{currencyFormatter.format(disposableChargeValue)}</span>
+              </div>
+              <div className="px-3 py-2 rounded bg-green-50 border border-green-200 text-green-900 text-xs font-semibold flex-1 min-w-[120px] flex flex-col items-center">
+                <span className="mb-0.5">Medicines</span>
+                <span className="text-base font-bold">{currencyFormatter.format(medicinesTotal)}</span>
+              </div>
               {discountValue > 0 && (
-                <tr className="hover:bg-base-50">
-                  <td className="text-rose-600">Discount</td>
-                  <td className="text-right font-medium text-rose-600">
-                    - {currencyFormatter.format(discountValue)}
-                  </td>
-                </tr>
+                <div className="px-3 py-2 rounded bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex-1 min-w-[120px] flex flex-col items-center">
+                  <span className="mb-0.5">Discount</span>
+                  <span className="text-base font-bold">- {currencyFormatter.format(discountValue)}</span>
+                </div>
               )}
-              <tr className="border-t-2 border-base-300 bg-primary/5">
-                <td className="text-base font-bold text-primary">Total Amount</td>
-                <td className="text-right text-lg font-bold text-primary">
-                  {currencyFormatter.format(totalChargeEstimate)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+              <div className="px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-xs font-bold flex-1 min-w-[120px] flex flex-col items-center">
+                <span className="mb-0.5">Total</span>
+                <span className="text-lg font-bold">{currencyFormatter.format(totalChargeEstimate)}</span>
+              </div>
             </div>
 
             <div className="rounded-lg border border-base-200 bg-base-50 p-3">

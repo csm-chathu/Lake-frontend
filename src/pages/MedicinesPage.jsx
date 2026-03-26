@@ -27,19 +27,34 @@ const createEmptyBrand = () => ({
   image_url: '',
   supplier_id: '',
   batch_number: '',
+  unit_type: 'unit',
+  conversion: 1,
+  unit_cost: '',
+  scale: 'ml',
   batches: [createEmptyBatch()]
 });
 
-const createEmptyItem = () => ({
+const createEmptyItem = (type = ['medicine']) => ({
   name: '',
   description: '',
+  type,
   brands: [createEmptyBrand()]
 });
 
 const MedicinesPage = () => {
-  const { items, loading, error, createItem, updateItem, deleteItem } = useEntityApi('medicines');
+  const { items, loading, error, createItem, updateItem, deleteItem, setParams } = useEntityApi('medicines');
+  // Filter for type 'medicine' only
+  // Type filter state
+  const [typeFilter, setTypeFilter] = useState('all');
+  useEffect(() => {
+    if (typeFilter === 'all') {
+      setParams({});
+    } else {
+      setParams({ type: typeFilter });
+    }
+  }, [setParams, typeFilter]);
   const location = useLocation();
-  const [formState, setFormState] = useState(() => createEmptyItem());
+  const [formState, setFormState] = useState(() => createEmptyItem(['medicine']));
   const [editingId, setEditingId] = useState(null);
   const [formError, setFormError] = useState('');
   const [suppliers, setSuppliers] = useState([]);
@@ -63,6 +78,7 @@ const MedicinesPage = () => {
   const columns = useMemo(
     () => [
       { header: 'Name', accessor: 'name' },
+      { header: 'Type', accessor: 'type', render: (item) => Array.isArray(item.type) ? item.type.map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(', ') : (item.type ? item.type.charAt(0).toUpperCase() + item.type.slice(1) : '—') },
       {
         header: 'Description',
         accessor: 'description',
@@ -122,7 +138,12 @@ const MedicinesPage = () => {
   );
 
   const handleFieldChange = (field, value) => {
-    setFormState((prev) => ({ ...prev, [field]: value }));
+    // For type, ensure it's always an array
+    if (field === 'type') {
+      setFormState((prev) => ({ ...prev, type: value }));
+    } else {
+      setFormState((prev) => ({ ...prev, [field]: value }));
+    }
   };
 
   const handleBrandChange = (index, field, value) => {
@@ -242,7 +263,7 @@ const MedicinesPage = () => {
   const resetForm = () => {
     setEditingId(null);
     setFormError('');
-    setFormState(createEmptyItem());
+    setFormState(createEmptyItem(['medicine']));
   };
 
   const validateForm = () => {
@@ -267,15 +288,14 @@ const MedicinesPage = () => {
         return 'Brand wholesale prices must be zero or greater.';
       }
 
-      const validBatches = (brand.batches || []).filter((batch) => batch.batch_number?.trim());
-      if (!validBatches.length) {
-        return 'Add at least one batch number for each brand.';
-      }
-
-      for (const batch of validBatches) {
-        const quantityValue = Number.parseInt(batch.quantity, 10);
-        if (Number.isNaN(quantityValue) || quantityValue < 0) {
-          return 'Batch quantity must be zero or greater.';
+      // Batch number is now optional, but if batches exist, check their quantities
+      const batches = brand.batches || [];
+      for (const batch of batches) {
+        if (batch.batch_number && batch.batch_number.trim() !== '') {
+          const quantityValue = Number.parseInt(batch.quantity, 10);
+          if (Number.isNaN(quantityValue) || quantityValue < 0) {
+            return 'Batch quantity must be zero or greater.';
+          }
         }
       }
     }
@@ -283,13 +303,53 @@ const MedicinesPage = () => {
     return '';
   };
 
+  // Helper to generate a UUID (RFC4122 v4, simple version)
+  function uuidv4() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
   const buildPayload = () => {
     const normalizedBrands = formState.brands
       .filter((brand) => brand.name.trim())
       .map((brand) => {
         const priceValue = Number.parseFloat(brand.price);
         const wholesalePriceValue = Number.parseFloat(brand.wholesale_price);
-        const normalizedBatches = (brand.batches || [])
+        let batches = Array.isArray(brand.batches) ? brand.batches : [];
+
+        // If no batches, but user entered expiry_date, quantity, or supplier_id at brand level, create a batch
+        const hasBatchInfo = !!(brand.expiry_date || brand.stock || brand.supplier_id);
+        if (!batches.length && hasBatchInfo) {
+          let expiryDate = null;
+          if (brand.expiry_date) {
+            if (brand.expiry_date instanceof Date) {
+              expiryDate = brand.expiry_date.toISOString().split('T')[0];
+            } else if (typeof brand.expiry_date === 'string' && brand.expiry_date.trim()) {
+              expiryDate = brand.expiry_date;
+            }
+          }
+          batches = [{
+            batch_number: uuidv4(),
+            quantity: brand.stock ?? 0,
+            expiry_date: expiryDate,
+            supplier_id: brand.supplier_id || null
+          }];
+        }
+
+        // If user entered a batch with expiry_date or quantity but no batch_number, auto-generate batch_number
+        batches = batches.map((batch) => {
+          let batchNumber = batch.batch_number;
+          if (!batchNumber || !batchNumber.trim()) {
+            if (batch.expiry_date || batch.quantity || batch.supplier_id) {
+              batchNumber = uuidv4();
+            }
+          }
+          return { ...batch, batch_number: batchNumber };
+        });
+
+        const normalizedBatches = batches
           .filter((batch) => batch.batch_number?.trim())
           .map((batch) => {
             let expiryDate = null;
@@ -300,7 +360,6 @@ const MedicinesPage = () => {
                 expiryDate = batch.expiry_date;
               }
             }
-
             return {
               ...(batch.id ? { id: Number(batch.id) } : {}),
               batch_number: batch.batch_number.trim(),
@@ -312,7 +371,7 @@ const MedicinesPage = () => {
           });
 
         const stockValue = normalizedBatches.reduce((sum, batch) => sum + (Number(batch.quantity) || 0), 0);
-        
+
         // Format date for API
         let expiryDate = null;
         if (brand.expiry_date) {
@@ -322,7 +381,7 @@ const MedicinesPage = () => {
             expiryDate = brand.expiry_date;
           }
         }
-        
+
         return {
           ...(brand.id ? { id: Number(brand.id) } : {}),
           name: brand.name.trim(),
@@ -334,6 +393,10 @@ const MedicinesPage = () => {
           image_url: brand.image_url?.trim() || null,
           supplier_id: brand.supplier_id || null,
           batch_number: brand.batch_number?.trim() || null,
+          unit_type: brand.unit_type || 'unit',
+          conversion: brand.conversion || 1,
+          unit_cost: Number(brand.unit_cost) || 0,
+          scale: brand.scale || 'ml',
           batches: normalizedBatches
         };
       });
@@ -341,6 +404,7 @@ const MedicinesPage = () => {
     return {
       name: formState.name.trim(),
       description: formState.description.trim(),
+      type: Array.isArray(formState.type) ? formState.type : [formState.type],
       brands: normalizedBrands
     };
   };
@@ -372,6 +436,7 @@ const MedicinesPage = () => {
     setFormState({
       name: item.name || '',
       description: item.description || '',
+      type: Array.isArray(item.type) ? item.type : item.type ? [item.type] : ['medicine'],
       brands:
         Array.isArray(item.brands) && item.brands.length
           ? item.brands.map((brand) => ({
@@ -391,6 +456,13 @@ const MedicinesPage = () => {
               image_url: brand.image_url || '',
               supplier_id: brand.supplier_id || '',
               batch_number: brand.batch_number || '',
+              unit_type: brand.unit_type || 'unit',
+              conversion: brand.conversion || 1,
+              unit_cost:
+                brand.unit_cost !== undefined && brand.unit_cost !== null
+                  ? Number(brand.unit_cost).toFixed(2)
+                  : '',
+              scale: brand.scale || 'ml',
               batches:
                 Array.isArray(brand.batches) && brand.batches.length
                   ? brand.batches.map((batch) => ({
@@ -490,11 +562,26 @@ const MedicinesPage = () => {
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold text-slate-800">Items</h1>
-        <p className="text-sm text-slate-500">
-          Manage inventory items, track brand pricing, and keep appointment billing accurate.
-        </p>
+      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold text-slate-800">Stock</h1>
+          <p className="text-sm text-slate-500">
+            Manage inventory items, track brand pricing, and keep appointment billing accurate.
+          </p>
+        </div>
+        <div className="mt-2 md:mt-0">
+          <label className="text-xs font-medium text-slate-600 mr-2">Filter by type:</label>
+          <select
+            className="input input-sm input-bordered"
+            value={typeFilter}
+            onChange={e => setTypeFilter(e.target.value)}
+          >
+            <option value="all">All</option>
+            <option value="medicine">Medicine</option>
+            <option value="item">Item</option>
+            <option value="service">Service</option>
+          </select>
+        </div>
       </div>
 
       <section ref={formSectionRef} className="rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm">
@@ -516,27 +603,76 @@ const MedicinesPage = () => {
         )}
 
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-slate-600">Item name</span>
-              <input
-                type="text"
-                className="input input-bordered input-sm"
-                value={formState.name}
-                onChange={(event) => handleFieldChange('name', event.target.value)}
-                placeholder="Antibiotic"
-              />
-            </label>
-            <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-slate-600">Description</span>
-              <input
-                type="text"
-                className="input input-bordered input-sm"
-                value={formState.description}
-                onChange={(event) => handleFieldChange('description', event.target.value)}
-                placeholder="Common use, dosage notes, etc."
-              />
-            </label>
+                      <div className="grid gap-4 lg:grid-cols-2" style={{ position: 'relative' }}>
+                        <label className="flex flex-col gap-2">
+                          <span className="text-xs font-medium text-slate-600">Item name</span>
+                          <input
+                            type="text"
+                            className="input input-bordered input-sm"
+                            value={formState.name}
+                            onChange={(event) => handleFieldChange('name', event.target.value)}
+                            placeholder="Antibiotic"
+                          />
+                        </label>
+                          <label className="flex flex-col gap-2">
+                            <span className="text-xs font-medium text-slate-600">Description</span>
+                            <input
+                              type="text"
+                              className="input input-bordered input-sm"
+                              value={formState.description}
+                              onChange={(event) => handleFieldChange('description', event.target.value)}
+                              placeholder="Common use, dosage notes, etc."
+                            />
+                          </label>
+                        <div style={{ position: 'absolute', right: 0, top: 0 }} className="flex items-center gap-4">
+                          <label className="flex items-center gap-1">
+                            <input
+                              type="checkbox"
+                              checked={formState.type.includes('medicine')}
+                              onChange={() => {
+                                setFormState((prev) => {
+                                  const typeArr = prev.type.includes('medicine')
+                                    ? prev.type.filter(t => t !== 'medicine')
+                                    : [...prev.type, 'medicine'];
+                                  return { ...prev, type: typeArr };
+                                });
+                              }}
+                            />
+                            <span className="text-xs font-medium text-slate-600">Medicine</span>
+                          </label>
+                          <label className="flex items-center gap-1">
+                            <input
+                              type="checkbox"
+                              checked={formState.type.includes('item')}
+                              onChange={() => {
+                                setFormState((prev) => {
+                                  const typeArr = prev.type.includes('item')
+                                    ? prev.type.filter(t => t !== 'item')
+                                    : [...prev.type, 'item'];
+                                  return { ...prev, type: typeArr };
+                                });
+                              }}
+                            />
+                            <span className="text-xs font-medium text-slate-600">Item</span>
+                          </label>
+                          <label className="flex items-center gap-1">
+                            <input
+                              type="checkbox"
+                              checked={formState.type.includes('service')}
+                              onChange={() => {
+                                setFormState((prev) => {
+                                  const typeArr = prev.type.includes('service')
+                                    ? prev.type.filter(t => t !== 'service')
+                                    : [...prev.type, 'service'];
+                                  return { ...prev, type: typeArr };
+                                });
+                              }}
+                            />
+                            <span className="text-xs font-medium text-slate-600">Service</span>
+                          </label>
+                        </div>
+            <div />
+            <div />
           </div>
 
           <div className="rounded-xl border border-base-200 bg-base-50 p-4">
@@ -560,9 +696,8 @@ const MedicinesPage = () => {
                     0
                   );
                   const supplier = suppliers.find((s) => s.id === brand.supplier_id);
-
                   return (
-                    <div key={`${brand.id || 'new'}-${index}`} className="flex items-center gap-2 rounded-lg border border-base-300 bg-white p-3 hover:shadow-sm transition-shadow">
+                    <div key={brand.id || 'new-' + index} className="flex items-center gap-2 rounded-lg border border-base-300 bg-white p-3 hover:shadow-sm transition-shadow">
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-slate-700 truncate">{brand.name || '(Unnamed)'}</p>
                         <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">

@@ -13,7 +13,7 @@
         "preview": "vite preview",
         "lint": "eslint src --ext jsx,js --max-warnings=0",
         "postinstall": "electron-builder install-app-deps",
-        "dist": "npm run build && cross-env ELECTRON_BUILDER_SKIP_WIN_CODE_SIGN=true electron-builder"
+        "dist": "npm run build && node ../scripts/copy-backend.cjs && cross-env ELECTRON_BUILDER_SKIP_WIN_CODE_SIGN=true electron-builder"
     },
     "dependencies": {
         "@tanstack/react-query": "^5.90.21",
@@ -23,6 +23,7 @@
         "react-datepicker": "^9.1.0",
         "react-dom": "^18.2.0",
         "react-router-dom": "^6.22.1",
+        "react-select": "^5.10.2",
         "recharts": "^3.7.0"
     },
     "build": {

@@ -1,3 +1,8 @@
+// Capitalize the first letter of a string
+const capitalizeFirstLetter = (value) => {
+  if (!value) return '';
+  return value.charAt(0).toUpperCase() + value.slice(1);
+};
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
 import { useClinicSettings } from '../context/ClinicSettingsContext.jsx';
@@ -116,7 +121,8 @@ const QuickPatientRegistrationCard = ({
   onPatientCreated = () => {},
   onPatientUpdated = () => {},
   onFormChange = null,           // called with latest internal form state
-  hideActions = false           // if true, do not render save/clear buttons
+  hideActions = false,           // if true, do not render save/clear buttons
+  onViewPatientInfo = null
 }) => {
   const { settings } = useClinicSettings();
   const [form, setForm] = useState(() => createEmptyForm(owners, null, initialValues));
@@ -661,29 +667,62 @@ const QuickPatientRegistrationCard = ({
         </div>
       )}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-12 items-end">
-        <label className="form-control w-full md:col-span-3">
+        <label className="form-control w-full md:col-span-2">
           <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-500">
             Patient name <span className="text-red-600">*</span>
           </span>
           <input
             type="text"
-            className="input input-sm input-bordered bg-white"
+            className="input input-sm input-bordered w-full bg-white"
             value={form.patientName}
-            onChange={(event) => handleInputChange('patientName', event.target.value)}
-            placeholder="E.g. Bruno"
+            onChange={(event) => {
+              handleInputChange('patientName', capitalizeFirstLetter(event.target.value));
+            }}
+            placeholder="Name"
+            style={{ minWidth: 0 }}
           />
         </label>
-        <label className="form-control w-full md:col-span-2">
+        <label className="form-control w-full md:col-span-3">
           <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-500">
             Species
           </span>
-          <input
-            type="text"
-            className="input input-sm input-bordered bg-white"
-            value={form.species}
-            onChange={(event) => handleInputChange('species', event.target.value)}
-            placeholder="Canine"
-          />
+          <div className="flex flex-row flex-wrap items-center gap-3 mt-1">
+            {['Canine', 'Feline'].map((mainSpecies) => (
+              <label key={mainSpecies} className="inline-flex items-center mr-1 text-xs">
+                <input
+                  type="radio"
+                  name="species"
+                  className="radio radio-xs"
+                  value={mainSpecies}
+                  checked={form.species === mainSpecies}
+                  onChange={() => handleInputChange('species', mainSpecies)}
+                  style={{ width: 14, height: 14 }}
+                />
+                <span className="ml-0.5">{mainSpecies}</span>
+              </label>
+            ))}
+            <label className="inline-flex items-center text-xs">
+              <input
+                type="radio"
+                name="species"
+                className="radio radio-xs"
+                value="other"
+                checked={form.species !== 'Canine' && form.species !== 'Feline' && form.species !== ''}
+                onChange={() => handleInputChange('species', '')}
+                style={{ width: 14, height: 14 }}
+              />
+              <span className="ml-0.5">Other</span>
+              <input
+                type="text"
+                className="input input-2xs input-bordered bg-white ml-1 py-0 px-1"
+                value={form.species !== 'Canine' && form.species !== 'Feline' ? form.species : ''}
+                onChange={(event) => handleInputChange('species', capitalizeFirstLetter(event.target.value))}
+                placeholder="Enter species"
+                disabled={form.species === 'Canine' || form.species === 'Feline'}
+                style={{ width: 70, fontSize: '11px', height: 22 }}
+              />
+            </label>
+          </div>
         </label>
         <label className="form-control w-full md:col-span-2">
           <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -692,10 +731,11 @@ const QuickPatientRegistrationCard = ({
           <input
             type="text"
             list={BREED_DATALIST_ID}
-            className="input input-sm input-bordered bg-white"
+            className="input input-sm input-bordered w-full bg-white"
             value={form.breed}
-            onChange={(event) => handleInputChange('breed', event.target.value)}
-            placeholder="Labrador"
+            onChange={(event) => handleInputChange('breed', capitalizeFirstLetter(event.target.value))}
+            placeholder="Breed"
+            style={{ minWidth: 0 }}
           />
           <datalist id={BREED_DATALIST_ID}>
             {DEFAULT_BREEDS.map((opt) => (
@@ -703,11 +743,11 @@ const QuickPatientRegistrationCard = ({
             ))}
           </datalist>
         </label>
-        <div className="form-control w-full md:col-span-2">
+        <div className="form-control w-full md:col-span-1">
           <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-500">
             Gender
           </span>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-1 mt-1">
             {['male', 'female'].map((opt) => (
               <label key={opt} className="inline-flex items-center">
                 <input
@@ -718,44 +758,49 @@ const QuickPatientRegistrationCard = ({
                   checked={form.gender === opt}
                   onChange={(e) => handleInputChange('gender', e.target.value)}
                 />
-                <span className="ml-1 capitalize">{opt}</span>
+                <span className="ml-0.5 capitalize">{opt.slice(0, 1).toUpperCase()}</span>
               </label>
             ))}
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 md:col-span-3">
-          <label className="form-control w-full">
-            <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-500">Age (years )</span>
+        <div className="flex flex-row gap-2 md:col-span-4 items-end">
+          <label className="form-control w-full max-w-[100px]">
+            <span className="label-text text-[10px] font-semibold uppercase tracking-wide text-slate-500">Age (y)</span>
             <input
               type="number"
               min="0"
-              className="input input-sm input-bordered bg-white"
+              className="input input-sm input-bordered w-full bg-white"
               value={form.ageYears}
               onChange={(event) => handleInputChange('ageYears', event.target.value)}
               placeholder="0"
+              max="30"
+              style={{ minWidth: 0, maxWidth: 80 }}
             />
           </label>
-          <label className="form-control w-full">
-            <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-500">(months)</span>
+          <label className="form-control w-full max-w-[100px]">
+            <span className="label-text text-[10px] font-semibold uppercase tracking-wide text-slate-500">(m)</span>
             <input
               type="number"
               min="0"
-              className="input input-sm input-bordered bg-white"
+              max="12"
+              className="input input-sm input-bordered w-full bg-white"
               value={form.ageMonths}
               onChange={(event) => handleInputChange('ageMonths', event.target.value)}
               placeholder="0"
+              style={{ minWidth: 0, maxWidth: 80 }}
             />
           </label>
-          <label className="form-control w-full">
-            <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-500">Weight (kg)</span>
+          <label className="form-control w-full max-w-[120px]">
+            <span className="label-text text-[10px] font-semibold uppercase tracking-wide text-slate-500">Wt (kg)</span>
             <input
               type="number"
               min="0"
-              step="0.01"
-              className="input input-sm input-bordered bg-white"
+              step="0.1"
+              className="input input-sm input-bordered w-full bg-white"
               value={form.weight}
               onChange={(event) => handleInputChange('weight', event.target.value)}
               placeholder="0.0"
+              style={{ minWidth: 0, maxWidth: 100 }}
             />
           </label>
         </div>
@@ -780,7 +825,13 @@ const QuickPatientRegistrationCard = ({
               <input
                 type="text"
                 value={ownerSearch}
-                onChange={(e)=>{ if (!form.isWalkingPatient) { setOwnerSearch(e.target.value); setForm(prev=>({...prev,existingOwnerId:"", ownerFirstName: e.target.value})); } }}
+                onChange={(e)=>{
+                  if (!form.isWalkingPatient) {
+                    const capitalized = capitalizeFirstLetter(e.target.value);
+                    setOwnerSearch(capitalized);
+                    setForm(prev=>({...prev,existingOwnerId:"", ownerFirstName: capitalized}));
+                  }
+                }}
                 placeholder="Search or type owner name"
                 className={`input input-sm input-bordered w-full ${form.existingOwnerId || form.isWalkingPatient ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
                 readOnly={!!form.existingOwnerId || form.isWalkingPatient}
@@ -851,6 +902,16 @@ const QuickPatientRegistrationCard = ({
               </svg>
               Print
             </button>
+            {onViewPatientInfo && initialValues && (
+              <button
+                type="button"
+                className="btn btn-sm btn-outline btn-secondary flex items-center gap-1"
+                onClick={onViewPatientInfo}
+              >
+                <span className="text-lg">👁️</span>
+                <span className="font-semibold">View patient info</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

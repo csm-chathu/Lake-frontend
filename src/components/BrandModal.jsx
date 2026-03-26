@@ -82,19 +82,21 @@ export default function BrandModal({
 
   return (
     <div className="modal modal-open">
-      <div className="modal-box w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white pb-4 border-b border-base-200 mb-4 -mx-6 px-6 pt-6">
+      <div className="modal-box w-full max-w-4xl max-h-[90vh] flex flex-col p-0">
+        {/* Header (not sticky) */}
+        <div className="bg-white pb-4 border-b border-base-200 px-6 pt-6">
           <h3 className="font-bold text-lg text-slate-800">
             {brand.id ? '✏️ Edit Brand' : '➕ Add New Brand'}
           </h3>
           <p className="text-xs text-slate-500 mt-1">
-            Configure brand details, pricing, and stock batches
+            Configure brand details, pricing, units, and stock batches
           </p>
         </div>
 
-        <div className="space-y-4">
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-6 space-y-4">
           {/* Brand Basic Information */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 bg-base-50 p-3 rounded-lg">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 bg-base-50 p-3 rounded-lg">
             <label className="flex flex-col gap-2">
               <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Brand Name *</span>
               <input
@@ -106,6 +108,81 @@ export default function BrandModal({
                   onSave(index, newBrand);
                 }}
                 placeholder="Brand name"
+              />
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Unit Type</span>
+              <select
+                className="select select-bordered select-sm"
+                value={brand.unit_type || 'unit'}
+                onChange={(e) => {
+                  const newBrand = { ...brand, unit_type: e.target.value };
+                  if (e.target.value === 'unit') {
+                    newBrand.conversion = 1;
+                    newBrand.scale = 'unit';
+                  }
+                  onSave(index, newBrand);
+                }}
+              >
+                <option value="bottle">Bottle</option>
+                <option value="packet">Packet</option>
+                <option value="tube">Tube</option>
+                <option value="sachet">Sachet</option>
+                <option value="box">Box</option>
+                <option value="unit">Unit</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Scale</span>
+                <select
+                    className="select select-bordered select-sm"
+                    value={brand.scale || 'ml'}
+                    onChange={(e) => {
+                        const newBrand = { ...brand, scale: e.target.value };
+                        if (e.target.value === 'unit') {
+                            newBrand.unit_type = 'unit';
+                            newBrand.conversion = 1;
+                        }
+                        onSave(index, newBrand);
+                    }}
+                >
+                    <option value="ml">ml</option>
+                    <option value="l">l</option>
+                    <option value="g">g</option>
+                    <option value="mg">mg</option>
+                    <option value="kg">kg</option>
+                    <option value="unit">unit</option>
+                </select>
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Conversion</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                className="input input-bordered input-sm"
+                value={brand.conversion || '1'}
+                onChange={(e) => {
+                  const newBrand = { ...brand, conversion: e.target.value };
+                  onSave(index, newBrand);
+                }}
+                placeholder="1"
+                disabled={brand.unit_type === 'unit'}
+              />
+            </label>
+             <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Unit Cost</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className="input input-bordered input-sm"
+                value={brand.unit_cost ?? ''}
+                onChange={(e) => {
+                  const newBrand = { ...brand, unit_cost: e.target.value };
+                  onSave(index, newBrand);
+                }}
+                placeholder="0.00"
               />
             </label>
             <label className="flex flex-col gap-2">
@@ -352,7 +429,8 @@ export default function BrandModal({
         </div>
 
         {/* Modal Actions */}
-        <div className="modal-action mt-6 sticky bottom-0 bg-white pt-4 border-t border-base-200 -mx-6 px-6 pb-6">
+        {/* Footer (not sticky) */}
+        <div className="modal-action mt-6 bg-white pt-4 border-t border-base-200 px-6 pb-6">
           <button
             type="button"
             className="btn btn-sm btn-ghost"

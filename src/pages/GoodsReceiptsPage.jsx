@@ -1,13 +1,17 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createGoodsReceipt, fetchGoodsReceipts, fetchPurchaseOrders } from '../api/procurement.js';
 import api from '../api/client.js';
 import EntityTable from '../components/EntityTable.jsx';
+import CreatableSelect from 'react-select/creatable';
 
 const fmt = new Intl.NumberFormat('en-LK', { style: 'currency', currency: 'LKR' });
 
 const emptyLine = () => ({
   description: '',
   quantity: '',
+  unitType: 'unit',
+  scale: 'ml',
+  conversion: 1,
   unitCost: '',
   wholesalePrice: '',
   sellingPrice: '',
@@ -22,7 +26,6 @@ const emptyGRN = () => ({
   supplierId: '',
   purchaseOrderId: '',
   receivedDate: new Date().toISOString().slice(0, 10),
-  notes: '',
   items: [emptyLine()],
 });
 
@@ -43,6 +46,9 @@ const flattenMedicineVariants = (value) =>
       sellingPrice: Number(brand.price) || 0,
       wholesalePrice: Number(brand.wholesale_price) || 0,
       barcode: brand.barcode || '',
+      unitType: brand.unit_type ?? 'unit',
+      unitCost: Number(brand.unit_cost) || 0,
+      conversion: Number(brand.conversion) || 1,
     }))
   );
 
@@ -108,7 +114,7 @@ const GRNDetailModal = ({ grn, suppliers, onClose }) => {
           enableSearch={false}
         />
 
-        {grn.notes && <p className="text-xs text-slate-400">Notes: {grn.notes}</p>}
+        
       </div>
       <div className="modal-backdrop" onClick={onClose} />
     </dialog>
@@ -141,6 +147,8 @@ const CreateGRNModal = ({ suppliers, purchaseOrders, medicineVariants, medicineN
         items: po.items.map((li) => ({
           description: li.description ?? '',
           quantity: String(li.quantity ?? ''),
+          unitType: li.unitType ?? 'bottle',
+          conversion: li.conversion ?? 1,
           unitCost: String(li.unitCost ?? ''),
           wholesalePrice: String(li.wholesalePrice ?? ''),
           sellingPrice: String(li.sellingPrice ?? ''),
@@ -154,6 +162,14 @@ const CreateGRNModal = ({ suppliers, purchaseOrders, medicineVariants, medicineN
     }
   };
 
+  // Helper to generate a UUID (RFC4122 v4, simple version)
+  function uuidv4() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.supplierId) { setErr('Please select a supplier.'); return; }
@@ -162,18 +178,27 @@ const CreateGRNModal = ({ suppliers, purchaseOrders, medicineVariants, medicineN
     try {
       const payload = {
         ...form,
-        items: form.items.map((l) => ({
-          description: l.description,
-          quantity: Number(l.quantity) || 0,
-          unitCost: Number(l.unitCost) || 0,
-          wholesalePrice: l.wholesalePrice !== '' ? Number(l.wholesalePrice) : undefined,
-          sellingPrice: l.sellingPrice !== '' ? Number(l.sellingPrice) : undefined,
-          barcode: l.barcode || undefined,
-          stockItemId: l.stockItemId ? Number(l.stockItemId) : undefined,
-          medicineBrandId: l.medicineBrandId ? Number(l.medicineBrandId) : undefined,
-          batchNumber: l.batchNumber || undefined,
-          expiryDate: l.expiryDate || undefined,
-        })),
+        items: form.items.map((l) => {
+          let batchNumber = l.batchNumber;
+          if (!batchNumber || !batchNumber.trim()) {
+            batchNumber = uuidv4();
+          }
+          return {
+            description: l.description,
+            quantity: Number(l.quantity) || 0,
+            unitType: l.unitType,
+            scale: l.scale,
+            conversion: Number(l.conversion) || 1,
+            unitCost: Number(l.unitCost) || 0,
+            wholesalePrice: l.wholesalePrice !== '' ? Number(l.wholesalePrice) : undefined,
+            sellingPrice: l.sellingPrice !== '' ? Number(l.sellingPrice) : undefined,
+            barcode: l.barcode || undefined,
+            stockItemId: l.stockItemId ? Number(l.stockItemId) : undefined,
+            medicineBrandId: l.medicineBrandId ? Number(l.medicineBrandId) : undefined,
+            batchNumber,
+            expiryDate: l.expiryDate || undefined,
+          };
+        }),
       };
       const res = await createGoodsReceipt(payload);
       onCreated?.(res.data ?? res);
@@ -190,7 +215,7 @@ const CreateGRNModal = ({ suppliers, purchaseOrders, medicineVariants, medicineN
 
   return (
     <dialog open className="modal modal-open">
-      <div className="modal-box w-[96vw] max-w-6xl bg-white text-slate-900 p-0 overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="modal-box w-[96vw] max-w-7xl bg-white text-slate-900 p-0 overflow-hidden flex flex-col max-h-[92vh]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
@@ -208,7 +233,7 @@ const CreateGRNModal = ({ suppliers, purchaseOrders, medicineVariants, medicineN
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Supplier *</span>
                 <select required
-                  className="select select-sm select-bordered w-full"
+                  className="select select-xs select-bordered w-full"
                   value={form.supplierId}
                   onChange={(e) => setField('supplierId', e.target.value)}
                 >
@@ -219,7 +244,7 @@ const CreateGRNModal = ({ suppliers, purchaseOrders, medicineVariants, medicineN
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Link to PO</span>
                 <select
-                  className="select select-sm select-bordered w-full"
+                  className="select select-xs select-bordered w-full"
                   value={form.purchaseOrderId}
                   onChange={(e) => handlePOChange(e.target.value)}
                 >
@@ -232,7 +257,7 @@ const CreateGRNModal = ({ suppliers, purchaseOrders, medicineVariants, medicineN
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Received Date</span>
                 <input type="date"
-                  className="input input-sm input-bordered w-full"
+                  className="input input-xs input-bordered w-full"
                   value={form.receivedDate}
                   onChange={(e) => setField('receivedDate', e.target.value)}
                 />
@@ -253,173 +278,257 @@ const CreateGRNModal = ({ suppliers, purchaseOrders, medicineVariants, medicineN
             </div>
 
             <div className="overflow-auto flex-1 rounded-xl border border-slate-200">
-              <table className="table table-sm w-full">
-                <thead className="sticky top-0 z-10 bg-slate-100 text-slate-600">
-                  <tr>
-                    <th className="w-6 text-center">#</th>
-                    <th className="min-w-[180px]">Item Name *</th>
-                    <th className="min-w-[120px]">Variant</th>
-                    <th className="w-20 text-right">Qty *</th>
-                    <th className="w-28 text-right">Unit Cost</th>
-                    <th className="w-28 text-right">Wholesale</th>
-                    <th className="w-28 text-right">Sell Price</th>
-                    <th className="w-28 text-right">Line Total</th>
-                    <th className="w-28">Barcode</th>
-                    <th className="w-24">Batch #</th>
-                    <th className="w-32">Expiry</th>
-                    <th className="w-10" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {form.items.map((li, idx) => (
-                    <tr key={idx} className="align-top hover:bg-slate-50 border-b border-slate-100">
-                      <td className="text-center text-xs text-slate-400 pt-2.5">{idx + 1}</td>
-
-                      {/* Item name */}
-                      <td className="py-1.5">
-                        <input type="text" required
-                          list={`grn-item-names-${idx}`}
-                          placeholder="Type or select item"
-                          className="input input-xs input-bordered w-full"
-                          value={li.description}
-                          onChange={(e) => setLine(idx, 'description', e.target.value)}
-                        />
-                        <datalist id={`grn-item-names-${idx}`}>
-                          {medicineNames.map((name) => <option key={name} value={name} />)}
-                        </datalist>
-                      </td>
-
-                      {/* Variant */}
-                      <td className="py-1.5">
-                        <select
-                          className="select select-xs select-bordered w-full"
-                          value={li.medicineBrandId}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            const selectedVariant = medicineVariants.find((variant) => String(variant.id) === String(value));
-                            setForm((prev) => ({
-                              ...prev,
-                              items: prev.items.map((line, lineIndex) => {
-                                if (lineIndex !== idx) {
-                                  return line;
+              <div className="divide-y divide-slate-200">
+                {form.items.map((li, idx) => (
+                  <div key={idx} className={`p-4 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`} style={{ position: 'relative', zIndex: form.items.length - idx }}>
+                    <div className="flex items-start gap-4">
+                      <div className="text-center text-xs text-slate-400 pt-7 w-6">{idx + 1}</div>
+                      <div className="flex-1 grid grid-cols-12 gap-x-4 gap-y-3 items-start">
+                        {/* --- Row 1 --- */}
+                        <div className="form-control col-span-12 sm:col-span-6 md:col-span-3">
+                          <span className="label-text text-xs font-semibold text-slate-500">Item Name *</span>
+                          <CreatableSelect
+                            isClearable
+                            placeholder="Type or select item"
+                            options={medicineNames.map(name => ({ value: name, label: name }))}
+                            value={li.description ? { value: li.description, label: li.description } : null}
+                            onChange={(option) => {
+                              setLine(idx, 'description', option ? option.value : '');
+                              // When an item is selected, filter variants
+                              const selectedVariant = medicineVariants.find((variant) => variant.medicineName.toLowerCase() === (option ? option.value.toLowerCase() : ''));
+                              if (selectedVariant) {
+                                setLine(idx, 'medicineBrandId', String(selectedVariant.id));
+                                setLine(idx, 'sellingPrice', String(selectedVariant.sellingPrice ?? ''));
+                                setLine(idx, 'wholesalePrice', String(selectedVariant.wholesalePrice ?? ''));
+                                if (!li.barcode) {
+                                  setLine(idx, 'barcode', selectedVariant.barcode);
                                 }
+                              }
+                            }}
+                            onCreateOption={(inputValue) => setLine(idx, 'description', inputValue)}
+                            menuPortalTarget={document.body}
+                            styles={{
+                              control: (base, state) => ({
+                                ...base,
+                                minHeight: '2rem',
+                                height: '2rem',
+                                fontSize: '0.875rem',
+                                borderColor: state.isFocused ? 'hsl(var(--p))' : 'hsl(var(--bc) / 0.2)',
+                                backgroundColor: 'hsl(var(--b1))',
+                                borderRadius: 'var(--rounded-btn, 0.5rem)',
+                                boxShadow: state.isFocused ? '0 0 0 1px hsl(var(--p))' : 'none',
+                                '&:hover': {
+                                  borderColor: state.isFocused ? 'hsl(var(--p))' : 'hsl(var(--bc) / 0.2)',
+                                }
+                              }),
+                              input: (base) => ({ ...base, margin: 0, padding: 0, color: 'hsl(var(--bc))' }),
+                              valueContainer: (base) => ({ ...base, padding: '0 0.5rem' }),
+                              dropdownIndicator: (base) => ({ ...base, padding: '0 0.5rem' }),
+                              clearIndicator: (base) => ({ ...base, padding: '0 0.5rem' }),
+                              menu: (base) => ({ ...base, backgroundColor: 'white' }),
+                              menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                              option: (base, state) => ({
+                                ...base,
+                                backgroundColor: state.isSelected ? 'hsl(var(--p))' : (state.isFocused ? 'hsl(var(--p) / 0.2)' : 'transparent'),
+                                color: state.isSelected ? 'hsl(var(--pc))' : 'hsl(var(--bc))',
+                              }),
+                            }}
+                          />
+                        </div>
+                        <label className="form-control col-span-12 sm:col-span-6 md:col-span-2">
+                          <span className="label-text text-xs font-semibold text-slate-500">Variant</span>
+                          <select
+                            className="select select-sm select-bordered w-full mt-1"
+                            value={li.medicineBrandId}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              const selectedVariant = medicineVariants.find((variant) => String(variant.id) === String(value));
+                              setForm((prev) => ({
+                                ...prev,
+                                items: prev.items.map((line, lineIndex) => {
+                                  if (lineIndex !== idx) return line;
 
-                                return {
-                                  ...line,
-                                  medicineBrandId: value,
-                                  sellingPrice: selectedVariant ? String(selectedVariant.sellingPrice ?? '') : line.sellingPrice,
-                                  wholesalePrice: selectedVariant ? String(selectedVariant.wholesalePrice ?? '') : line.wholesalePrice,
-                                  barcode: selectedVariant && !line.barcode ? selectedVariant.barcode : line.barcode,
-                                };
-                              })
-                            }));
-                          }}
-                        >
-                          <option value="">— variant —</option>
-                          {medicineVariants
-                            .filter((v) => !li.description || v.medicineName.toLowerCase() === li.description.toLowerCase())
-                            .map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-                        </select>
-                      </td>
+                                  if (!selectedVariant) {
+                                    return { ...line, medicineBrandId: value };
+                                  }
 
-                      {/* Qty */}
-                      <td className="py-1.5">
-                        <input type="number" min="1" required
-                          className="input input-xs input-bordered w-full text-right"
-                          value={li.quantity}
-                          onChange={(e) => setLine(idx, 'quantity', e.target.value)}
-                        />
-                      </td>
+                                  return {
+                                    ...line,
+                                    medicineBrandId: value,
+                                    sellingPrice: String(selectedVariant.sellingPrice ?? ''),
+                                    wholesalePrice: String(selectedVariant.wholesalePrice ?? ''),
+                                    barcode: line.barcode || selectedVariant.barcode || '',
+                                    unitType: selectedVariant.unitType,
+                                    unitCost: String(selectedVariant.unitCost ?? ''),
+                                    conversion: selectedVariant.conversion,
+                                  };
+                                })
+                              }));
+                            }}
+                          >
+                            <option value="">— variant —</option>
+                            {medicineVariants.filter((v) => !li.description || v.medicineName.toLowerCase() === li.description.toLowerCase()).map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                          </select>
+                        </label>
+                        <label className="form-control col-span-6 sm:col-span-3 md:col-span-1">
+                          <span className="label-text text-xs font-semibold text-slate-500">Qty *</span>
+                          <input type="number" min="1" required
+                            className="input input-sm input-bordered w-full text-right mt-1"
+                            value={li.quantity}
+                            onChange={(e) => setLine(idx, 'quantity', e.target.value)}
+                          />
+                        </label>
+                        <label className="form-control col-span-6 sm:col-span-3 md:col-span-2">
+                          <span className="label-text text-xs font-semibold text-slate-500">Unit Cost</span>
+                          <input type="number" min="0" step="0.01"
+                            className="input input-sm input-bordered w-full text-right mt-1"
+                            value={li.unitCost}
+                            onChange={(e) => setLine(idx, 'unitCost', e.target.value)}
+                          />
+                        </label>
+                        <label className="form-control col-span-6 sm:col-span-3 md:col-span-2">
+                          <span className="label-text text-xs font-semibold text-slate-500">Wholesale Price</span>
+                          <input type="number" min="0" step="0.01"
+                            className="input input-sm input-bordered w-full text-right mt-1"
+                            value={li.wholesalePrice}
+                            onChange={(e) => setLine(idx, 'wholesalePrice', e.target.value)}
+                          />
+                        </label>
+                        <label className="form-control col-span-6 sm:col-span-3 md:col-span-2">
+                          <span className="label-text text-xs font-semibold text-slate-500">Selling Price</span>
+                          <input type="number" min="0" step="0.01"
+                            className="input input-sm input-bordered w-full text-right mt-1"
+                            value={li.sellingPrice}
+                            onChange={(e) => setLine(idx, 'sellingPrice', e.target.value)}
+                          />
+                        </label>
 
-                      {/* Unit Cost */}
-                      <td className="py-1.5">
-                        <input type="number" min="0" step="0.01"
-                          className="input input-xs input-bordered w-full text-right"
-                          value={li.unitCost}
-                          onChange={(e) => setLine(idx, 'unitCost', e.target.value)}
-                        />
-                      </td>
+                        {/* --- Row 2 --- */}
+                        <label className="form-control col-span-6 sm:col-span-3 md:col-span-1">
+                          <span className="label-text text-xs font-semibold text-slate-500">Unit Type</span>
+                          <select
+                            className="select select-sm select-bordered w-full mt-1"
+                            value={li.unitType}
+                            onChange={(e) => {
+                              const newUnitType = e.target.value;
+                              setLine(idx, 'unitType', newUnitType);
+                              if (newUnitType === 'unit') {
+                                setLine(idx, 'conversion', 1);
+                                setLine(idx, 'scale', 'unit');
+                              }
+                            }}
+                          >
+                            <option value="bottle">bottle</option>
+                            <option value="packet">packet</option>
+                            <option value="tube">tube</option>
+                            <option value="sachet">sachet</option>
+                            <option value="box">box</option>
+                            <option value="unit">unit</option>
+                          </select>
+                        </label>
+                        <label className="form-control col-span-6 sm:col-span-3 md:col-span-1">
+                            <span className="label-text text-xs font-semibold text-slate-500">Scale</span>
+                            <select
+                                className="select select-sm select-bordered w-full mt-1"
+                                value={li.scale}
+                                onChange={(e) => {
+                                    const newScale = e.target.value;
+                                    setLine(idx, 'scale', newScale);
+                                    if (newScale === 'unit') {
+                                        setLine(idx, 'unitType', 'unit');
+                                        setLine(idx, 'conversion', 1);
+                                    }
+                                }}
+                            >
+                                <option value="ml">ml</option>
+                                <option value="l">l</option>
+                                <option value="g">g</option>
+                                <option value="mg">mg</option>
+                                <option value="kg">kg</option>
+                                <option value="unit">unit</option>
+                            </select>
+                        </label>
+                        {li.unitType !== 'unit' && (
+                          <>
+                            <label className="form-control col-span-6 sm:col-span-3 md:col-span-1">
+                              <span className="label-text text-xs font-semibold text-slate-500">Conv.</span>
+                              <input type="number" min="1"
+                                className="input input-sm input-bordered w-full text-right mt-1"
+                                value={li.conversion}
+                                onChange={(e) => setLine(idx, 'conversion', e.target.value)}
+                              />
+                            </label>
+                            <div className="form-control col-span-6 sm:col-span-3 md:col-span-1">
+                              <span className="label-text text-xs font-semibold text-slate-500">Cost/Use</span>
+                              <div className="text-right text-sm text-slate-700 pt-2 pr-2">
+                                {fmt.format((Number(li.unitCost) || 0) / (Number(li.conversion) || 1))}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                        {li.unitType !== 'unit' && (
+                          <div className="form-control col-span-6 sm:col-span-3 md:col-span-1">
+                            <span className="label-text text-xs font-semibold text-slate-500">Sell/Use</span>
+                            <div className="text-right text-sm text-slate-700 pt-2 pr-2">
+                              {fmt.format((Number(li.sellingPrice) || 0) / (Number(li.conversion) || 1))}
+                            </div>
+                          </div>
+                        )}
+                        <div className="form-control col-span-6 sm:col-span-3 md:col-span-2">
+                          <span className="label-text text-xs font-semibold text-slate-500">Line Total</span>
+                          <div className="text-right text-sm font-semibold text-slate-700 pt-2 pr-2">
+                            {fmt.format(lineTotal(li))}
+                          </div>
+                        </div>
+                        <label className="form-control col-span-6 sm:col-span-4 md:col-span-2">
+                          <span className="label-text text-xs font-semibold text-slate-500">Barcode</span>
+                          <input type="text" placeholder="—"
+                            className="input input-sm input-bordered w-full mt-1"
+                            value={li.barcode}
+                            onChange={(e) => setLine(idx, 'barcode', e.target.value)}
+                          />
+                        </label>
+                        <label className="form-control col-span-6 sm:col-span-4 md:col-span-2">
+                          <span className="label-text text-xs font-semibold text-slate-500">Batch #</span>
+                          <input type="text" placeholder="—"
+                            className="input input-sm input-bordered w-full mt-1"
+                            value={li.batchNumber}
+                            onChange={(e) => setLine(idx, 'batchNumber', e.target.value)}
+                          />
+                        </label>
+                        <label className="form-control col-span-12 sm:col-span-4 md:col-span-2">
+                          <span className="label-text text-xs font-semibold text-slate-500">Expiry</span>
+                          <input type="date"
+                            className="input input-sm input-bordered w-full mt-1"
+                            value={li.expiryDate}
+                            onChange={(e) => setLine(idx, 'expiryDate', e.target.value)}
+                          />
+                        </label>
+                      </div>
+                      <div className="pt-6">
 
-                      {/* Wholesale Price */}
-                      <td className="py-1.5">
-                        <input type="number" min="0" step="0.01"
-                          className="input input-xs input-bordered w-full text-right"
-                          value={li.wholesalePrice}
-                          onChange={(e) => setLine(idx, 'wholesalePrice', e.target.value)}
-                        />
-                      </td>
-
-                      {/* Selling Price */}
-                      <td className="py-1.5">
-                        <input type="number" min="0" step="0.01"
-                          className="input input-xs input-bordered w-full text-right"
-                          value={li.sellingPrice}
-                          onChange={(e) => setLine(idx, 'sellingPrice', e.target.value)}
-                        />
-                      </td>
-
-                      {/* Line total (read-only) */}
-                      <td className="py-1.5 text-right text-xs font-semibold text-slate-700 pt-2.5 pr-2">
-                        {fmt.format(lineTotal(li))}
-                      </td>
-
-                      {/* Barcode */}
-                      <td className="py-1.5">
-                        <input type="text" placeholder="—"
-                          className="input input-xs input-bordered w-full"
-                          value={li.barcode}
-                          onChange={(e) => setLine(idx, 'barcode', e.target.value)}
-                        />
-                      </td>
-
-                      {/* Batch */}
-                      <td className="py-1.5">
-                        <input type="text" placeholder="—"
-                          className="input input-xs input-bordered w-full"
-                          value={li.batchNumber}
-                          onChange={(e) => setLine(idx, 'batchNumber', e.target.value)}
-                        />
-                      </td>
-
-                      {/* Expiry */}
-                      <td className="py-1.5">
-                        <input type="date"
-                          className="input input-xs input-bordered w-full"
-                          value={li.expiryDate}
-                          onChange={(e) => setLine(idx, 'expiryDate', e.target.value)}
-                        />
-                      </td>
-
-                      {/* Remove */}
-                      <td className="py-1.5 text-center">
-                        <button type="button"
-                          disabled={form.items.length === 1}
-                          className="btn btn-xs btn-ghost text-error disabled:opacity-30"
-                          onClick={() => removeLine(idx)}
-                          title="Remove row"
-                        >✕</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-slate-50 font-semibold text-slate-700">
-                    <td colSpan={7} className="text-right text-xs pr-2 py-2">Grand Total</td>
-                    <td className="text-right text-sm pr-2 py-2 text-primary">{fmt.format(grandTotal)}</td>
-                    <td colSpan={4} />
-                  </tr>
-                </tfoot>
-              </table>
+                        {/* Remove */}
+                          <button type="button"
+                            disabled={form.items.length === 1}
+                            className="btn btn-xs btn-ghost text-error disabled:opacity-30"
+                            onClick={() => removeLine(idx)}
+                            title="Remove row"
+                          >✕</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-end items-center p-4 bg-slate-50 font-semibold text-slate-700 border-t border-slate-200 mt-auto">
+                <span className="text-right text-xs pr-2 py-2">Grand Total</span>
+                <span className="text-right text-sm pr-2 py-2 text-primary">{fmt.format(grandTotal)}</span>
+              </div>
             </div>
           </div>
 
           {/* Footer */}
           <div className="px-6 py-4 border-t border-slate-100 shrink-0 space-y-3">
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Notes</span>
-              <textarea rows={2} className="textarea textarea-bordered textarea-sm w-full"
-                value={form.notes} onChange={(e) => setField('notes', e.target.value)} />
-            </label>
+            
 
             {err && <p className="text-error text-xs">{err}</p>}
 
@@ -553,7 +662,7 @@ const GoodsReceiptsPage = () => {
       <div className="flex items-center gap-2">
         <input
           type="text"
-          className="input input-bordered input-sm w-72"
+          className="input input-bordered input-xs w-72"
           placeholder="Search GRN, supplier, notes..."
           value={query}
           onChange={(e) => {
@@ -575,7 +684,7 @@ const GoodsReceiptsPage = () => {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <select
-            className="select select-sm select-bordered"
+            className="select select-xs select-bordered"
             value={perPage}
             onChange={(e) => {
               setPerPage(Number(e.target.value) || 10);

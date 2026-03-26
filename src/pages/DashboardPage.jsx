@@ -188,6 +188,7 @@ const DashboardPage = () => {
     medicines.forEach((medicine) => {
       const medicineName = medicine?.name || 'Unnamed item';
       const brands = Array.isArray(medicine?.brands) ? medicine.brands : [];
+      const type = medicine?.type || 'medicine';
 
       brands.forEach((brand) => {
         const brandName = brand?.name || 'Unnamed brand';
@@ -229,7 +230,8 @@ const DashboardPage = () => {
               batchNumber: batch.batch_number || '—',
               quantity: Number(batch.quantity) || 0,
               expiryDate,
-              daysUntilExpiry
+              daysUntilExpiry,
+              type
             });
           });
           return;
@@ -269,7 +271,8 @@ const DashboardPage = () => {
           batchNumber: brand.batch_number || '—',
           quantity: Number(brand.stock) || 0,
           expiryDate,
-          daysUntilExpiry
+          daysUntilExpiry,
+          type
         });
       });
     });
@@ -643,7 +646,7 @@ const DashboardPage = () => {
                     {expiringSoonItems.map((item) => (
                       <li key={item.id}>
                         <Link
-                          to="/medicines"
+                          to={item.type === 'item' ? '/items-variants' : '/medicines'}
                           state={{
                             focusBatch: {
                               medicineId: item.medicineId,
@@ -767,7 +770,7 @@ const DashboardPage = () => {
                 {expiringSoonAll.map((item) => (
                   <li key={`modal-${item.id}`}>
                     <Link
-                      to="/medicines"
+                      to={item.type === 'item' ? '/items-variants' : '/medicines'}
                       state={{
                         focusBatch: {
                           medicineId: item.medicineId,

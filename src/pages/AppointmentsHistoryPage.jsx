@@ -449,7 +449,7 @@ const AppointmentsHistoryPage = () => {
                   </div>
                 </div>
                 <div className="rounded-xl border border-base-300 bg-base-100 p-4">
-                  <h3 className="mb-3 text-sm font-semibold text-slate-800">Medicines dispensed</h3>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-800">Item dispensed</h3>
                   {Array.isArray(expandedAppointment.medicines) && expandedAppointment.medicines.length > 0 ? (
                     <ul className="space-y-2 text-sm text-slate-600">
                       {expandedAppointment.medicines.map((item) => {

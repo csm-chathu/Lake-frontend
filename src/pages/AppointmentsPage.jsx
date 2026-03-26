@@ -45,6 +45,13 @@ const parseNullableNumber = (value) => {
   return Number.isNaN(numeric) ? null : numeric;
 };
 
+const capitalizeFirstLetter = (string) => {
+  if (typeof string !== 'string' || string.length === 0) {
+    return string;
+  }
+  return string.charAt(0).toUpperCase() + string.slice(1);
+};
+
 const AppointmentsPage = () => {
   const appointmentApi = useEntityApi('appointments');
   const patientsApi = useEntityApi('patients');
@@ -247,7 +254,9 @@ const AppointmentsPage = () => {
           label: `${medicine.name} — ${brand.name}`,
           price: Number(brand.price) || 0,
           medicineName: medicine.name,
-          brandName: brand.name
+          brandName: brand.name,
+          scale: brand.scale,
+          conversion: brand.conversion
         });
       });
     });
@@ -588,6 +597,7 @@ const AppointmentsPage = () => {
         onPatientUpdated={handlePatientUpdated}
         hideActions={true}               // hide internal buttons
         onFormChange={setNewPatientForm} // keep parent's copy
+        onViewPatientInfo={selectedPatient ? () => setShowPatientModal(true) : null}
       />
     ),
     [
@@ -919,26 +929,7 @@ const AppointmentsPage = () => {
         ageParts.push(`${months} mo${months > 1 ? 's' : ''}`);
       }
 
-      list.push({
-        name: '__patientProfile',
-        render: () => (
-          <>
-            {selectedPatient && (
-              <div className="mb-2 flex justify-end">
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline btn-secondary flex items-center gap-1"
-                  onClick={() => setShowPatientModal(true)}
-                >
-                  <span className="text-lg">👁️</span>
-                  <span className="font-semibold">View patient info</span>
-                </button>
-              </div>
-            )}
-          </>
-        ),
-        fullWidth: true
-      });
+
 
       if (startedTreatment) {
         list.push(
@@ -956,13 +947,13 @@ const AppointmentsPage = () => {
 
               return (
                 <>
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-3 grid-cols-2">
                     <div className="flex flex-col gap-2">
                       <span className="text-sm font-medium text-slate-600">{label || 'Reason'}</span>
                       <input
                         type="text"
                         value={currentValue}
-                        onChange={(event) => onChange(event.target.value)}
+                        onChange={(event) => onChange(capitalizeFirstLetter(event.target.value))}
                         placeholder={reasonPlaceholder}
                         className="input input-bordered bg-white"
                       />
@@ -972,7 +963,7 @@ const AppointmentsPage = () => {
                       <input
                         type="text"
                         value={noteValue}
-                        onChange={(event) => handleChange('notes', event.target.value)}
+                        onChange={(event) => handleChange('notes', capitalizeFirstLetter(event.target.value))}
                         placeholder="Reminder details, prep steps, etc."
                         className="input input-bordered bg-white"
                       />
@@ -1065,13 +1056,13 @@ const AppointmentsPage = () => {
             const noteValue = typeof values?.notes === 'string' ? values.notes : '';
             return (
               <>
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-3 grid-cols-2">
                   <div className="flex flex-col gap-2">
                     <span className="text-sm font-medium text-slate-600">{label || 'Reason'}</span>
                     <input
                       type="text"
                       value={currentValue}
-                      onChange={(event) => onChange(event.target.value)}
+                      onChange={(event) => onChange(capitalizeFirstLetter(event.target.value))}
                       placeholder={reasonPlaceholder}
                       className="input input-bordered bg-white"
                     />
@@ -1081,7 +1072,7 @@ const AppointmentsPage = () => {
                     <input
                       type="text"
                       value={noteValue}
-                      onChange={(event) => handleChange('notes', event.target.value)}
+                      onChange={(event) => handleChange('notes', capitalizeFirstLetter(event.target.value))}
                       placeholder="Reminder details, prep steps, etc."
                       className="input input-bordered bg-white"
                     />
@@ -1641,6 +1632,34 @@ const AppointmentsPage = () => {
     refreshPatients
   ]);
 
+  // Compute today's registered patients (last 5)
+  const todayRegisteredPatients = useMemo(() => {
+    if (!Array.isArray(patients)) return [];
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+    return patients
+      .filter((p) => {
+        if (!p.createdAt) return false;
+        // Accept both string and Date
+        const created = typeof p.createdAt === 'string' ? p.createdAt.slice(0, 10) : '';
+        return created === todayStr;
+      })
+      .sort((a, b) => (b.id || 0) - (a.id || 0))
+      .slice(0, 5);
+  }, [patients]);
+
+  const handleTodayPatientClick = (patient) => {
+    if (!patient) return;
+    setFormState((prev) => ({ ...prev, patientId: String(patient.id) }));
+    setPatientSearchQuery(patient.name || '');
+    setProfileTab('owner');
+    setShowPatientModal(false);
+    setNewPatientForm(null);
+  };
+
   return (
     <section className="space-y-2">
       {successMessage && (
@@ -1662,18 +1681,47 @@ const AppointmentsPage = () => {
 
       {/* show submit button whenever the form has progressed past just the search
           (typing in the search field or actually selecting a patient), or while editing */}
-      <EntityForm
-        fields={fields}
-        values={formState}
-        onChange={handleChange}
-        onSubmit={handleSubmit}
-        preventSubmitOnEnter={true}
-        submitLabel={editingId ? 'Update treatment' : 'Complete Appointment'}
-        isEditing={Boolean(editingId)}
-        onCancel={resetForm}
-        showSubmit={true}
-        submitLoading={isSaving}
-      />
+      <div className="relative">
+        <div className="card bg-base-100 shadow border border-base-200 p-4 mb-6 relative">
+          {/* Absolutely positioned yellow box for today's patients inside card */}
+          {todayRegisteredPatients.length > 0 && (
+            <div className="absolute top-5 right-6 z-20 w-56">
+              <div className="bg-yellow-100 border border-yellow-300 rounded-lg shadow p-2">
+                <div className="text-xs font-bold text-yellow-800 mb-2 text-center">Today Registered</div>
+                <ul className="flex flex-col gap-1">
+                  {todayRegisteredPatients.map((patient) => (
+                    <li key={patient.id}>
+                      <button
+                        type="button"
+                        className="w-full text-left px-2 py-1 rounded bg-yellow-200 hover:bg-yellow-300 text-yellow-900 text-xs font-semibold truncate"
+                        title={patient.name}
+                        onClick={() => handleTodayPatientClick(patient)}
+                      >
+                        {patient.name}
+                        {patient.passbookNumber && (
+                          <span className="ml-2 text-[10px] text-yellow-700">#{patient.passbookNumber}</span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+          <EntityForm
+            fields={fields}
+            values={formState}
+            onChange={handleChange}
+            onSubmit={handleSubmit}
+            preventSubmitOnEnter={true}
+            submitLabel={editingId ? 'Update treatment' : 'Complete Appointment'}
+            isEditing={Boolean(editingId)}
+            onCancel={resetForm}
+            showSubmit={true}
+            submitLoading={isSaving}
+          />
+        </div>
+      </div>
       {/* veterinarian removed from form */}
 
       <InvoicePrintModal

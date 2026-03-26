@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import useEntityApi from '../hooks/useEntityApi.js';
 
+
 const SettingsPage = () => {
   const presetsApi = useEntityApi('doctor-charge-presets');
   const { items: presets, loading, error, createItem, updateItem, deleteItem, refresh } = presetsApi;
@@ -16,6 +17,18 @@ const SettingsPage = () => {
     refresh: refreshSurgeryPresets
   } = surgeryPresetsApi;
 
+  // Disposabal charge presets
+  const disposabalPresetsApi = useEntityApi('disposabal-charge-presets');
+  const {
+    items: disposabalPresets,
+    loading: disposabalLoading,
+    error: disposabalError,
+    createItem: createDisposabalPreset,
+    updateItem: updateDisposabalPreset,
+    deleteItem: deleteDisposabalPreset,
+    refresh: refreshDisposabalPresets
+  } = disposabalPresetsApi;
+
   const empty = { name: '', label: '', value: '', active: true };
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
@@ -24,7 +37,43 @@ const SettingsPage = () => {
   const [surgeryEditing, setSurgeryEditing] = useState(null);
   const [surgeryForm, setSurgeryForm] = useState(surgeryEmpty);
 
+  const disposabalEmpty = { name: '', label: '', value: '', active: true };
+  const [disposabalEditing, setDisposabalEditing] = useState(null);
+  const [disposabalForm, setDisposabalForm] = useState(disposabalEmpty);
+
   const [chargesTab, setChargesTab] = useState('doctor');
+  const startDisposabalCreate = useCallback(() => {
+    setDisposabalEditing(null);
+    setDisposabalForm(disposabalEmpty);
+  }, []);
+
+  const startDisposabalEdit = useCallback((item) => {
+    setDisposabalEditing(item.id);
+    setDisposabalForm({ name: item.name || '', label: item.label || '', value: String(item.value ?? ''), active: Boolean(item.active) });
+  }, []);
+
+  const handleDisposabalSave = async () => {
+    const payload = {
+      name: disposabalForm.name || undefined,
+      label: disposabalForm.label || undefined,
+      value: Number.parseFloat(disposabalForm.value) || 0,
+      active: Boolean(disposabalForm.active)
+    };
+    const res = disposabalEditing
+      ? await updateDisposabalPreset(disposabalEditing, payload)
+      : await createDisposabalPreset(payload);
+    if (res.success) {
+      setDisposabalForm(disposabalEmpty);
+      setDisposabalEditing(null);
+      refreshDisposabalPresets();
+    }
+  };
+
+  const handleDisposabalDelete = async (id) => {
+    if (!window.confirm('Delete this preset? This cannot be undone.')) return;
+    const res = await deleteDisposabalPreset(id);
+    if (res.success) refreshDisposabalPresets();
+  };
 
   const startCreate = useCallback(() => {
     setEditing(null);
@@ -93,7 +142,7 @@ const SettingsPage = () => {
   };
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-6" >
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-semibold text-slate-800">Settings</h1>
         <p className="text-sm text-slate-500">Clinic configuration and master data.</p>
@@ -122,7 +171,80 @@ const SettingsPage = () => {
             >
               Surgery charge
             </a>
+            <a
+              href="#disposabal"
+              role="tab"
+              className={`tab ${chargesTab === 'disposabal' ? 'tab-active' : ''}`}
+              onClick={(e) => { e.preventDefault(); setChargesTab('disposabal'); }}
+            >
+              Disposabal charge
+            </a>
           </div>
+                {chargesTab === 'disposabal' && (
+                  <div className="space-y-4 w-full" >
+                    {disposabalError && <div className="alert alert-error">{disposabalError}</div>}
+                    <div className="overflow-x-auto">
+                      <table className="table w-full">
+                        <thead>
+                          <tr>
+                            <th>Label</th>
+                            <th>Value (LKR)</th>
+                            <th>Internal name</th>
+                            <th>Active</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(disposabalPresets || []).map((p) => (
+                            <tr key={p.id}>
+                              <td className="font-medium">{p.label}</td>
+                              <td>{Number.isFinite(Number(p.value)) ? Number(p.value).toFixed(2) : '-'}</td>
+                              <td className="text-xs text-slate-500">{p.name || '—'}</td>
+                              <td>{p.active ? 'Yes' : 'No'}</td>
+                              <td className="text-right">
+                                <button className="btn btn-sm btn-outline mr-2" onClick={() => startDisposabalEdit(p)}>Edit</button>
+                                <button className="btn btn-sm btn-error btn-outline" onClick={() => handleDisposabalDelete(p.id)}>Delete</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="w-full">
+                      <div className="rounded-lg border border-base-200 bg-white p-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <h3 className="text-sm font-medium text-slate-800">{disposabalEditing ? 'Edit preset' : 'Create preset'}</h3>
+                        <button className="btn btn-xs btn-outline" onClick={startDisposabalCreate}>New preset</button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <div>
+                          <label className="label"><span className="label-text">Label (visible)</span></label>
+                          <input className="input input-bordered w-full" value={disposabalForm.label} onChange={(e) => setDisposabalForm((s) => ({ ...s, label: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label className="label"><span className="label-text">Value (LKR)</span></label>
+                          <input type="number" step="0.01" min="0" className="input input-bordered w-full" value={disposabalForm.value} onChange={(e) => setDisposabalForm((s) => ({ ...s, value: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label className="label"><span className="label-text">Internal name</span></label>
+                          <input className="input input-bordered w-full" value={disposabalForm.name} onChange={(e) => setDisposabalForm((s) => ({ ...s, name: e.target.value }))} placeholder="optional identifier" />
+                        </div>
+                      </div>
+                      <div className="mt-3 flex items-center gap-3">
+                        <label className="flex items-center gap-2">
+                          <input type="checkbox" checked={Boolean(disposabalForm.active)} onChange={(e) => setDisposabalForm((s) => ({ ...s, active: e.target.checked }))} />
+                          <span className="text-sm text-slate-600">Active</span>
+                        </label>
+                        <div className="ml-auto flex gap-2">
+                          <button className="btn btn-sm btn-ghost" onClick={() => { setDisposabalForm(disposabalEmpty); setDisposabalEditing(null); }}>Cancel</button>
+                          <button className="btn btn-sm btn-primary" onClick={handleDisposabalSave}>{disposabalEditing ? 'Update' : 'Create'}</button>
+                        </div>
+                      </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
         </div>
 
         {chargesTab === 'doctor' && (

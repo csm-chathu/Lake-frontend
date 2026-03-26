@@ -58,6 +58,33 @@ function getPhpBinary() {
 function startPhp() {
   return new Promise((resolve, reject) => {
     const phpBin = getPhpBinary();
+    // Support both dev (../backend-laravel) and packaged (dist/backend-laravel) modes
+    let backendPath;
+    const devPath = path.join(__dirname, '..', 'backend-laravel');
+    const distPath = path.join(__dirname, 'backend-laravel');
+    const devArtisan = path.join(devPath, 'artisan');
+    const distArtisan = path.join(distPath, 'artisan');
+    console.log('[debug] Checking backend paths...');
+    console.log('[debug] devPath:', devPath, '| exists:', fs.existsSync(devPath), '| artisan:', fs.existsSync(devArtisan));
+    console.log('[debug] distPath:', distPath, '| exists:', fs.existsSync(distPath), '| artisan:', fs.existsSync(distArtisan));
+    if (fs.existsSync(distPath) && fs.existsSync(distArtisan)) {
+      backendPath = distPath;
+    } else if (fs.existsSync(devPath) && fs.existsSync(devArtisan)) {
+      backendPath = devPath;
+    } else {
+      console.error('[backend] ERROR: Could not find backend-laravel folder or artisan script in either dev or dist locations.');
+      reject(new Error('backend-laravel not found'));
+      return;
+    }
+    console.log('[debug] PATH:', process.env.PATH);
+    console.log('[debug] phpBin:', phpBin);
+    console.log('[debug] backendPath:', backendPath);
+    if (!fs.existsSync(path.join(backendPath, 'vendor'))) {
+      console.error('[backend] ERROR: vendor folder missing in backend-laravel.');
+    }
+    if (!fs.existsSync(path.join(backendPath, 'artisan'))) {
+      console.error('[backend] ERROR: artisan script missing in backend-laravel.');
+    }
     
     if (!phpBin) {
       console.error('[php] PHP interpreter not found!');
@@ -66,8 +93,6 @@ function startPhp() {
       return;
     }
 
-    const backendPath = path.join(__dirname, '..', 'backend-laravel');
-    
     console.log('[backend] Starting PHP server with:', phpBin);
     phpProcess = spawn(phpBin, ['artisan', 'serve', '--host=127.0.0.1', '--port=8000'], {
       cwd: backendPath,

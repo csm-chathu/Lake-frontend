@@ -25,7 +25,10 @@ import SupplierCreditNotesPage from './pages/SupplierCreditNotesPage.jsx';
 import EmployeeManagementPage from './pages/EmployeeManagementPage.jsx';
 import CustomerReturnsPage from './pages/CustomerReturnsPage.jsx';
 import SalesHeatmapPage from './pages/SalesHeatmapPage.jsx';
+
 import LowStockPage from './pages/LowStockPage.jsx';
+
+import IncomeExpensePage from './pages/IncomeExpensePage.jsx';
 
 const App = () => (
   <Layout>
@@ -61,6 +64,7 @@ const App = () => (
         <Route path="/procurement/supplier-invoices" element={<SupplierInvoicesPage />} />
         <Route path="/procurement/supplier-credit-notes" element={<SupplierCreditNotesPage />} />
         <Route path="/sales/customer-returns" element={<CustomerReturnsPage />} />
+        <Route path="/income-expense" element={<IncomeExpensePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -42,7 +42,8 @@ export const calculateMedicinesTotal = (rows = [], brandLookup = new Map()) => {
       return sum;
     }
     const unitPrice = Number(option.price) || 0;
-    return sum + unitPrice * quantity;
+    const conversion = Number(option.conversion) || 1;
+    return sum + (unitPrice / conversion) * quantity;
   }, 0);
 
   return Number(total.toFixed(2));
@@ -126,7 +127,9 @@ const AppointmentMedicineSelector = ({
   const rowsWithComputed = rows.map((row) => {
     const option = brandLookup.get(String(row.medicineBrandId));
     const quantity = Number.parseFloat(row.quantity) || 0;
-    const unitPrice = option ? Number(option.price) : 0;
+    const originalUnitPrice = option ? Number(option.price) || 0 : 0;
+    const conversion = option ? Number(option.conversion) || 1 : 1;
+    const unitPrice = originalUnitPrice / conversion;
     const fallbackLabel = [option?.medicine?.name, option?.name].filter(Boolean).join(' — ');
     const query = typeof row.query === 'string' && row.query.length > 0 ? row.query : fallbackLabel || row.label || '';
     const normalizedQuery = query.trim().toLowerCase();
@@ -146,6 +149,7 @@ const AppointmentMedicineSelector = ({
       option,
       quantity,
       unitPrice,
+      originalUnitPrice,
       totalPrice: Number((unitPrice * quantity).toFixed(2)),
       label: option ? option.label : row.label || fallbackLabel || '',
       query,
@@ -300,7 +304,7 @@ const AppointmentMedicineSelector = ({
     <div className="rounded-xl border border-base-200 bg-white p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-medium text-slate-700">Medicines dispensed</p>
+          <p className="text-sm font-medium text-slate-700">Item dispensed</p>
           <p className="text-xs text-slate-500">Track dispensed brands to include them in billing.</p>
         </div>
         {!hideAddButton && (
@@ -330,7 +334,8 @@ const AppointmentMedicineSelector = ({
           <table className="table table-sm">
             <thead>
               <tr className="text-xs uppercase text-slate-500">
-                <th className="text-left">Brand</th>
+                <th className="text-left w-2/5">Brand</th>
+                <th className="text-left">Scale</th>
                 <th className="text-right">Unit price</th>
                 <th className="w-28 text-right">Quantity</th>
                 <th className="text-right">Line total</th>
@@ -398,7 +403,9 @@ const AppointmentMedicineSelector = ({
                                     <span className="flex-1">{option.label}</span>
                                     <span className="text-xs text-slate-500">
                                       {Number.isFinite(option.price)
-                                        ? currencyFormatter.format(option.price)
+                                        ? currencyFormatter.format(
+                                        (Number(option.price) || 0) / (Number(option.conversion) || 1)
+                                      )
                                         : '—'}
                                     </span>
                                   </button>
@@ -413,8 +420,33 @@ const AppointmentMedicineSelector = ({
                       </div>
                     )}
                   </td>
+                  <td className="text-left align-top text-sm text-slate-600">
+                    {row.option ? (
+                      <div>
+                        <span>{row.option.scale || '—'}</span>
+                        {row.option.conversion > 1 && (
+                          <div className="text-xs text-slate-400 font-normal">
+                            (1 to {row.option.conversion})
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                   <td className="text-right text-sm text-slate-600">
-                    {row.option ? currencyFormatter.format(row.unitPrice) : '—'}
+                    {row.option ? (
+                      <div>
+                        <span>{currencyFormatter.format(row.unitPrice)}</span>
+                        {row.originalUnitPrice !== row.unitPrice && (
+                          <div className="text-xs text-slate-400 font-normal">
+                            (was {currencyFormatter.format(row.originalUnitPrice)})
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   <td className="text-right">
                     <input
