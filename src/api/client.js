@@ -31,7 +31,7 @@ client.interceptors.request.use((config) => {
 client.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && error.config.url !== '/login') {
       localStorage.removeItem('authToken');
       localStorage.removeItem('authUser');
       localStorage.removeItem('authTokenExpiration');

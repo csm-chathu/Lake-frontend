@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import client from '../api/client.js';
 
 const AuthContext = createContext(null);
@@ -21,6 +21,12 @@ export const AuthProvider = ({ children }) => {
   });
 
   const [token, setToken] = useState(() => localStorage.getItem('authToken') || null);
+
+  const logout = useCallback(() => {
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem('authTokenExpiration');
+  }, []);
 
   useEffect(() => {
     if (token) {
@@ -64,12 +70,6 @@ export const AuthProvider = ({ children }) => {
       return { success: true };
     }
     return { success: false, message: response.error || 'Login failed' };
-  };
-
-  const logout = () => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('authTokenExpiration');
   };
 
   return (
