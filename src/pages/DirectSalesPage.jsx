@@ -28,7 +28,7 @@ const DirectSalesPage = () => {
   const { settings } = useClinicSettings();
   const directSalesApi = useEntityApi('direct-sales');
   // Only fetch items with type 'item' for direct sale
-  const medicinesApi = useEntityApi('medicines', { type: 'item' });
+  const medicinesApi = useEntityApi('medicines');
 
   const { createItem: createDirectSale, error: directSalesError, refresh: refreshDirectSales } = directSalesApi;
   const { items: medicines, loading: medicinesLoading, error: medicinesError } = medicinesApi;
