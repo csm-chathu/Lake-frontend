@@ -1,3 +1,4 @@
+
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AppointmentMedicineSelector, { calculateMedicinesTotal } from '../components/AppointmentMedicineSelector.jsx';
 import InvoicePrintModal from '../components/InvoicePrintModal.jsx';
@@ -5,7 +6,6 @@ import useEntityApi from '../hooks/useEntityApi.js';
 import { useClinicSettings } from '../context/ClinicSettingsContext.jsx';
 
 const currencyFormatter = new Intl.NumberFormat('en-LK', { style: 'currency', currency: 'LKR' });
-const DISCOUNT_PRESETS = [10, 20, 30, 40];
 
 const generateSaleReference = () => {
   const now = new Date();
@@ -28,11 +28,16 @@ const DirectSalesPage = () => {
   const { settings } = useClinicSettings();
   const directSalesApi = useEntityApi('direct-sales');
   // Only fetch items with type 'item' for direct sale
-  const medicinesApi = useEntityApi('medicines');
+  const medicinesApi = useEntityApi('medicines', { type: 'item' });
+
 
   const { createItem: createDirectSale, error: directSalesError, refresh: refreshDirectSales } = directSalesApi;
   const { items: medicines, loading: medicinesLoading, error: medicinesError } = medicinesApi;
   const { refresh: refreshMedicines } = medicinesApi;
+
+  // Load discount presets from API
+  const { items: discountsApi, loading: discountsLoading } = useEntityApi('discounts');
+  const discountPresets = Array.isArray(discountsApi) ? discountsApi.filter((d) => d.active !== false) : [];
 
   const [formState, setFormState] = useState(createEmptySale);
   const [isSaving, setIsSaving] = useState(false);
@@ -523,19 +528,38 @@ const DirectSalesPage = () => {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {DISCOUNT_PRESETS.map((preset) => {
-                const isActive = discountPercent === preset;
-                return (
-                  <button
-                    key={preset}
-                    type="button"
-                    className={`badge badge-md cursor-pointer select-none px-3 py-2 transition ${isActive ? 'badge-primary' : 'badge-outline'}`}
-                    onClick={() => handleChange('discount', String(preset))}
-                  >
-                    {preset}%
-                  </button>
-                );
-              })}
+              {discountsLoading && <span className="text-xs text-slate-400">Loading discounts…</span>}
+              {discountPresets.length > 0 ? (
+                discountPresets.map((preset) => {
+                  const pct = Number(preset.value);
+                  const isActive = discountPercent === pct;
+                  return (
+                    <button
+                      key={preset.id ?? preset.name ?? pct}
+                      type="button"
+                      className={`badge badge-md cursor-pointer select-none px-3 py-2 transition ${isActive ? 'badge-primary' : 'badge-outline'}`}
+                      onClick={() => handleChange('discount', String(pct))}
+                      title={preset.name ? `Internal: ${preset.name}` : undefined}
+                    >
+                       <span className="ml-1 text-[10px] opacity-70">{preset.label}</span>
+                    </button>
+                  );
+                })
+              ) : (
+                [10, 20, 30, 40].map((preset) => {
+                  const isActive = discountPercent === preset;
+                  return (
+                    <button
+                      key={preset}
+                      type="button"
+                      className={`badge badge-md cursor-pointer select-none px-3 py-2 transition ${isActive ? 'badge-primary' : 'badge-outline'}`}
+                      onClick={() => handleChange('discount', String(preset))}
+                    >
+                      {preset}%
+                    </button>
+                  );
+                })
+              )}
             </div>
 
             <div className="grid grid-cols-4 gap-2">

@@ -27,6 +27,10 @@ export default function AppointmentChargesSummary({
     Array.isArray(disposableChargePresetsProp) && disposableChargePresetsProp.length
       ? disposableChargePresetsProp
       : (Array.isArray(disposableChargePresetsApi) ? disposableChargePresetsApi.filter((p) => p.active !== false) : []);
+  
+  const { items: discountsApi, loading: discountsLoading } = useEntityApi('discounts');
+  const discounts = Array.isArray(discountsApi) ? discountsApi.filter((d) => d.active !== false) : [];
+
   // compute derived values locally so callers don't need to already calculate them
   const doctorChargeValue = useMemo(() => {
     const parsed = Number.parseFloat(formState.doctorCharge);
@@ -112,9 +116,13 @@ export default function AppointmentChargesSummary({
                           className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
                           onClick={() => handleChangeField('doctorCharge', String(preset.value))}
                         >
-                          {preset.label}
-                          <span className="ml-1 text-xs opacity-70">
-                            {currencyFormatter.format(preset.value)}
+                          <span className="inline-flex flex-col items-center justify-center min-w-[54px]">
+                            <span className="text-[15px] font-bold leading-tight text-slate-700">
+                              {currencyFormatter.format(preset.value)}
+                            </span>
+                            <span className="text-[10px] leading-none text-slate-500 font-normal">
+                              {preset.label}
+                            </span>
                           </span>
                         </button>
                       );
@@ -166,9 +174,13 @@ export default function AppointmentChargesSummary({
                             className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
                             onClick={() => handleChangeField('disposableCharge', String(preset.value))}
                           >
-                            {preset.label}
-                            <span className="ml-1 text-xs opacity-70">
-                              {currencyFormatter.format(preset.value)}
+                            <span className="inline-flex flex-col items-center justify-center min-w-[54px]">
+                              {/* <span className="text-[15px] font-bold leading-tight text-slate-700">
+                                {currencyFormatter.format(preset.value)}
+                              </span> */}
+                              <span className="text-[10px] leading-none text-slate-500 font-normal">
+                                {preset.label}
+                              </span>
                             </span>
                           </button>
                         );
@@ -216,33 +228,67 @@ export default function AppointmentChargesSummary({
             </div>
             </div>
 
-            {/* Discount */}
+            {/* Discount (API-driven) */}
             <div className="rounded-lg border border-base-200 bg-base-50 p-4">
-            <label className="mb-2 block text-sm font-semibold text-slate-700">
-              🎟️ Discount
-            </label>
-            <div className="flex flex-wrap items-center gap-2">
-              {[0, 10, 20, 30, 40, 50].map((pct) => {
-                const gross = doctorChargeValue + surgeryChargeValue + serviceChargeValue + disposableChargeValue + medicinesTotal;
-                const v = Number(((gross * pct) / 100).toFixed(2));
-                const active = Number(v) === Number(discountValue);
-                return (
-                  <button
-                    type="button"
-                    key={pct}
-                    className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
-                    onClick={() => handleChangeField('discount', String(v))}
-                  >
-                    {pct === 0 ? 'No discount' : `${pct}%`}
-                  </button>
-                );
-              })}
-            </div>
-            {discountValue > 0 && (
-              <div className="mt-2 text-xs text-emerald-600 font-medium">
-                ✓ Discount applied: {currencyFormatter.format(discountValue)}
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                🎟️ Discount
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                {discountsLoading && <span className="text-xs text-slate-400">Loading...</span>}
+                {discounts && discounts.length > 0 ? (
+                  <>
+                    {discounts.map((preset) => {
+                      const gross = doctorChargeValue + surgeryChargeValue + serviceChargeValue + disposableChargeValue + medicinesTotal;
+                      const v = Number(((gross * Number(preset.value)) / 100).toFixed(2));
+                      const active = Number(v) === Number(discountValue);
+                      return (
+                        <button
+                          type="button"
+                          key={preset.id ?? preset.name ?? preset.value}
+                          className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
+                          onClick={() => handleChangeField('discount', String(v))}
+                          title={preset.name ? `Internal: ${preset.name}` : undefined}
+                        >
+                           <span className="ml-1 text-xs opacity-70">{preset.label}</span>
+                        </button>
+                      );
+                    })}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-slate-500">or</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formState.discount || ''}
+                        onChange={(e) => handleChangeField('discount', e.target.value)}
+                        placeholder="Custom amount"
+                        className="input input-sm input-bordered w-36"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs text-slate-400">No discount presets found.</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-slate-500">or</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formState.discount || ''}
+                        onChange={(e) => handleChangeField('discount', e.target.value)}
+                        placeholder="Custom amount"
+                        className="input input-sm input-bordered w-36"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
-            )}
+              {discountValue > 0 && (
+                <div className="mt-2 text-xs text-emerald-600 font-medium">
+                  ✓ Discount applied: {currencyFormatter.format(discountValue)}
+                </div>
+              )}
             </div>
           </div>
 
@@ -272,9 +318,13 @@ export default function AppointmentChargesSummary({
                                 className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
                                 onClick={() => handleChangeField('surgeryCharge', String(preset.value))}
                               >
-                                {preset.label}
-                                <span className="ml-1 text-xs opacity-70">
-                                  {currencyFormatter.format(preset.value)}
+                                <span className="inline-flex flex-col items-center justify-center min-w-[54px]">
+                                  <span className="text-[15px] font-bold leading-tight text-slate-700">
+                                    {currencyFormatter.format(preset.value)}
+                                  </span>
+                                  <span className="text-[10px] leading-none text-slate-500 font-normal">
+                                    {preset.label}
+                                  </span>
                                 </span>
                               </button>
                             );

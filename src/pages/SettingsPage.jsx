@@ -29,6 +29,17 @@ const SettingsPage = () => {
     refresh: refreshDisposabalPresets
   } = disposabalPresetsApi;
 
+  const discountsApi = useEntityApi('discounts');
+  const {
+    items: discounts,
+    loading: discountsLoading,
+    error: discountError,
+    createItem: createDiscount,
+    updateItem: updateDiscount,
+    deleteItem: deleteDiscount,
+    refresh: refreshDiscounts
+  } = discountsApi;
+
   const empty = { name: '', label: '', value: '', active: true };
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
@@ -40,6 +51,10 @@ const SettingsPage = () => {
   const disposabalEmpty = { name: '', label: '', value: '', active: true };
   const [disposabalEditing, setDisposabalEditing] = useState(null);
   const [disposabalForm, setDisposabalForm] = useState(disposabalEmpty);
+
+  const discountEmpty = { name: '', label: '', value: '', active: true };
+  const [discountEditing, setDiscountEditing] = useState(null);
+  const [discountForm, setDiscountForm] = useState(discountEmpty);
 
   const [chargesTab, setChargesTab] = useState('doctor');
   const startDisposabalCreate = useCallback(() => {
@@ -73,6 +88,39 @@ const SettingsPage = () => {
     if (!window.confirm('Delete this preset? This cannot be undone.')) return;
     const res = await deleteDisposabalPreset(id);
     if (res.success) refreshDisposabalPresets();
+  };
+
+  const startDiscountCreate = useCallback(() => {
+    setDiscountEditing(null);
+    setDiscountForm(discountEmpty);
+  }, []);
+
+  const startDiscountEdit = useCallback((item) => {
+    setDiscountEditing(item.id);
+    setDiscountForm({ name: item.name || '', label: item.label || '', value: String(item.value ?? ''), active: Boolean(item.active) });
+  }, []);
+
+  const handleDiscountSave = async () => {
+    const payload = {
+      name: discountForm.name || undefined,
+      label: discountForm.label || undefined,
+      value: Number.parseFloat(discountForm.value) || 0,
+      active: Boolean(discountForm.active)
+    };
+    const res = discountEditing
+      ? await updateDiscount(discountEditing, payload)
+      : await createDiscount(payload);
+    if (res.success) {
+      setDiscountForm(discountEmpty);
+      setDiscountEditing(null);
+      refreshDiscounts();
+    }
+  };
+
+  const handleDiscountDelete = async (id) => {
+    if (!window.confirm('Delete this preset? This cannot be undone.')) return;
+    const res = await deleteDiscount(id);
+    if (res.success) refreshDiscounts();
   };
 
   const startCreate = useCallback(() => {
@@ -179,7 +227,80 @@ const SettingsPage = () => {
             >
               Disposabal charge
             </a>
+            <a
+              href="#discount"
+              role="tab"
+              className={`tab ${chargesTab === 'discount' ? 'tab-active' : ''}`}
+              onClick={(e) => { e.preventDefault(); setChargesTab('discount'); }}
+            >
+              Discount
+            </a>
           </div>
+                {chargesTab === 'discount' && (
+                  <div className="space-y-4 w-full" >
+                    {discountError && <div className="alert alert-error">{discountError}</div>}
+                    <div className="overflow-x-auto">
+                      <table className="table w-full">
+                        <thead>
+                          <tr>
+                            <th>Label</th>
+                            <th>Value (Percentage)</th>
+                            <th>Internal name</th>
+                            <th>Active</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(discounts || []).map((p) => (
+                            <tr key={p.id}>
+                              <td className="font-medium">{p.label}</td>
+                              <td>{Number.isFinite(Number(p.value)) ? Number(p.value).toFixed(2) : '-'}</td>
+                              <td className="text-xs text-slate-500">{p.name || '—'}</td>
+                              <td>{p.active ? 'Yes' : 'No'}</td>
+                              <td className="text-right">
+                                <button className="btn btn-sm btn-outline mr-2" onClick={() => startDiscountEdit(p)}>Edit</button>
+                                <button className="btn btn-sm btn-error btn-outline" onClick={() => handleDiscountDelete(p.id)}>Delete</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="w-full">
+                      <div className="rounded-lg border border-base-200 bg-white p-4">
+                        <div className="mb-2 flex items-center justify-between">
+                          <h3 className="text-sm font-medium text-slate-800">{discountEditing ? 'Edit preset' : 'Create preset'}</h3>
+                          <button className="btn btn-xs btn-outline" onClick={startDiscountCreate}>New preset</button>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                          <div>
+                            <label className="label"><span className="label-text">Label (visible)</span></label>
+                            <input className="input input-bordered w-full" value={discountForm.label} onChange={(e) => setDiscountForm((s) => ({ ...s, label: e.target.value }))} />
+                          </div>
+                          <div>
+                            <label className="label"><span className="label-text">Value (Percentage)</span></label>
+                            <input type="number" step="0.01" min="0" className="input input-bordered w-full" value={discountForm.value} onChange={(e) => setDiscountForm((s) => ({ ...s, value: e.target.value }))} />
+                          </div>
+                          <div>
+                            <label className="label"><span className="label-text">Internal name</span></label>
+                            <input className="input input-bordered w-full" value={discountForm.name} onChange={(e) => setDiscountForm((s) => ({ ...s, name: e.target.value }))} placeholder="optional identifier" />
+                          </div>
+                        </div>
+                        <div className="mt-3 flex items-center gap-3">
+                          <label className="flex items-center gap-2">
+                            <input type="checkbox" checked={Boolean(discountForm.active)} onChange={(e) => setDiscountForm((s) => ({ ...s, active: e.target.checked }))} />
+                            <span className="text-sm text-slate-600">Active</span>
+                          </label>
+                          <div className="ml-auto flex gap-2">
+                            <button className="btn btn-sm btn-ghost" onClick={() => { setDiscountForm(discountEmpty); setDiscountEditing(null); setDiscountFormError(''); }}>Cancel</button>
+                            <button className="btn btn-sm btn-primary" onClick={handleDiscountSave}>{discountEditing ? 'Update' : 'Create'}</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {chargesTab === 'disposabal' && (
                   <div className="space-y-4 w-full" >
                     {disposabalError && <div className="alert alert-error">{disposabalError}</div>}
