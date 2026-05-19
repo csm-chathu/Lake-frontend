@@ -35,7 +35,7 @@ function createWindow() {
     win.loadURL('http://localhost:5173');
     win.webContents.openDevTools();
   } else {
-    win.loadFile(path.join(__dirname, 'dist', 'index.html'));
+    win.loadURL('http://127.0.0.1:8000');
   }
 
   // Close splash window when main window is ready

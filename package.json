@@ -30,23 +30,22 @@
         "appId": "com.vetfinal.app",
         "productName": "VetFinal",
         "files": [
-            "dist/**/*",
             "electron-main.cjs",
             "preload.js",
             "start-backend.cjs",
-            ".env",
-            "../backend-laravel/app/**/*",
-            "../backend-laravel/bootstrap/**/*",
-            "../backend-laravel/config/**/*",
-            "../backend-laravel/database/**/*",
-            "../backend-laravel/public/**/*",
-            "../backend-laravel/resources/**/*",
-            "../backend-laravel/routes/**/*",
-            "../backend-laravel/artisan",
-            "../backend-laravel/.env",
-            "../backend-laravel/composer.json",
-            "../backend-laravel/vendor/**/*",
             "mysql/**/*"
+        ],
+        "extraResources": [
+            {
+                "from": "../backend-laravel",
+                "to": "backend-laravel",
+                "filter": [
+                    "**/*",
+                    "!.git/**/*",
+                    "!tests/**/*",
+                    "!node_modules/**/*"
+                ]
+            }
         ],
         "directories": {
             "buildResources": "build"

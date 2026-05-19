@@ -61,18 +61,18 @@ function startPhp() {
     // Support both dev (../backend-laravel) and packaged (dist/backend-laravel) modes
     let backendPath;
     const devPath = path.join(__dirname, '..', 'backend-laravel');
-    const distPath = path.join(__dirname, 'backend-laravel');
+    const resourcesPath = path.join(process.resourcesPath || '', 'backend-laravel');
     const devArtisan = path.join(devPath, 'artisan');
-    const distArtisan = path.join(distPath, 'artisan');
+    const resourcesArtisan = path.join(resourcesPath, 'artisan');
     console.log('[debug] Checking backend paths...');
     console.log('[debug] devPath:', devPath, '| exists:', fs.existsSync(devPath), '| artisan:', fs.existsSync(devArtisan));
-    console.log('[debug] distPath:', distPath, '| exists:', fs.existsSync(distPath), '| artisan:', fs.existsSync(distArtisan));
-    if (fs.existsSync(distPath) && fs.existsSync(distArtisan)) {
-      backendPath = distPath;
+    console.log('[debug] resourcesPath:', resourcesPath, '| exists:', fs.existsSync(resourcesPath), '| artisan:', fs.existsSync(resourcesArtisan));
+    if (fs.existsSync(resourcesPath) && fs.existsSync(resourcesArtisan)) {
+      backendPath = resourcesPath;
     } else if (fs.existsSync(devPath) && fs.existsSync(devArtisan)) {
       backendPath = devPath;
     } else {
-      console.error('[backend] ERROR: Could not find backend-laravel folder or artisan script in either dev or dist locations.');
+      console.error('[backend] ERROR: Could not find backend-laravel folder or artisan script.');
       reject(new Error('backend-laravel not found'));
       return;
     }
@@ -96,10 +96,11 @@ function startPhp() {
     console.log('[backend] Starting PHP server with:', phpBin);
     phpProcess = spawn(phpBin, ['artisan', 'serve', '--host=127.0.0.1', '--port=8000'], {
       cwd: backendPath,
-      env: { 
-        ...process.env, 
+      env: {
+        ...process.env,
         APP_ENV: 'production',
-        APP_DEBUG: 'false'
+        APP_DEBUG: 'false',
+        DB_DATABASE: path.join(backendPath, 'database', 'localhost.sqlite'),
       },
       shell: true,
       detached: false

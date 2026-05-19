@@ -84,71 +84,116 @@ const InvoicePrintModal = ({
   };
 
   const handleThermalPrint = () => {
-    const receipt = {
-      clinicName,
-      phone: clinicPhone,
-      address: clinicAddress,
-      date: new Date().toLocaleString(),
-      invoiceReference,
-      doctorCharge: invoice.doctorCharge,
-      surgeryCharge: invoice.surgeryCharge,
-      otherCharge: invoice.otherCharge,
-      medicinesSubtotal: invoice.medicinesSubtotal,
-      discount: invoice.discount,
-      total: invoice.estimated,
-      patient: invoice.patientName || 'Unknown patient'
-    };
-    const win = window.open('', '_blank', 'width=320,height=600');
-    if (!win) {
-      return;
-    }
+    const rawLogo = settings?.logo_url || '';
+    const logoUrl = rawLogo
+      ? (() => { try { return new URL(rawLogo, window.location.href).href; } catch { return rawLogo; } })()
+      : '';
+    const date = new Date().toLocaleString();
+    const patient = invoice.patientName || 'Walk-in Customer';
+    const discount = Number(invoice.discount) || 0;
+    const total = Number(invoice.estimated) || 0;
 
-    // build line rows for print, showing only total amount (no unit)
-    const rows = lineItems.map(item => {
-      const total = item.qty * item.unit;
-      return `<div>${item.label} (x${item.qty}) : ${formatValue(formatter, total)}</div>`;
-    }).join('');
+    const win = window.open('', '_blank', 'width=360,height=700');
+    if (!win) return;
 
-    const barcodeSection = receipt.invoiceReference && barcodeMarkup
-      ? `<div class="center" style="margin-top:8px"><div style="font-size:11px;margin-bottom:2px">Invoice: ${escapeHtml(receipt.invoiceReference)}</div>${barcodeMarkup}</div>`
+    const logoHtml = logoUrl
+      ? `<img src="${escapeHtml(logoUrl)}" alt="logo" style="max-width:90px;max-height:60px;object-fit:contain;margin-bottom:4px" />`
       : '';
 
-    const content = `
+    const itemRows = lineItems.map((item) => {
+      const lineTotal = item.qty * item.unit;
+      return `
+        <tr>
+          <td style="padding:3px 2px">${escapeHtml(item.label)}</td>
+          <td style="text-align:center;padding:3px 2px">${item.qty}</td>
+          <td style="text-align:right;padding:3px 2px">${formatValue(formatter, item.unit)}</td>
+          <td style="text-align:right;padding:3px 2px">${formatValue(formatter, lineTotal)}</td>
+        </tr>`;
+    }).join('');
+
+    const subtotalVal = lineItems.reduce((s, i) => s + i.qty * i.unit, 0);
+
+    const barcodeSection = invoiceReference && barcodeMarkup
+      ? `<div style="margin-top:8px;text-align:center"><div style="font-size:10px;margin-bottom:2px">Ref: ${escapeHtml(invoiceReference)}</div>${barcodeMarkup}</div>`
+      : '';
+
+    const content = `<!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" />
+  <meta charset="utf-8"/>
   <title>Receipt</title>
   <style>
-    body { font-family: monospace; font-size:12px; margin:0; padding:8px; }
-    .center { text-align:center; }
-    .divider { border-top:1px dashed #000; margin:8px 0; }
-    .right { text-align:right; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Courier New', monospace; font-size: 12px; margin: 0; padding: 10px; width: 300px; color: #111; }
+    .center { text-align: center; }
+    .dashed { border: none; border-top: 1px dashed #555; margin: 6px 0; }
+    .solid  { border: none; border-top: 2px solid #111; margin: 6px 0; }
+    .clinic-name { font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
+    .clinic-sub  { font-size: 11px; color: #333; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { font-size: 10px; text-transform: uppercase; padding: 3px 2px; border-bottom: 1px solid #555; }
+    td { font-size: 11px; vertical-align: top; }
+    .total-row td { font-size: 13px; font-weight: 700; padding-top: 4px; }
+    .meta { font-size: 11px; margin: 2px 0; }
+    .footer { font-size: 11px; text-align: center; margin-top: 6px; }
+    @media print {
+      body { width: auto; padding: 0; }
+      @page { margin: 4mm; }
+    }
   </style>
 </head>
 <body>
   <div class="center">
-    <div style="font-weight:700; font-size:14px">${receipt.clinicName}</div>
-    <div>${receipt.address}</div>
-    <div>Tel: ${receipt.phone}</div>
+    ${logoHtml}
+    <div class="clinic-name">${escapeHtml(clinicName || 'Clinic')}</div>
+    ${clinicAddress ? `<div class="clinic-sub">${escapeHtml(clinicAddress)}</div>` : ''}
+    ${clinicPhone ? `<div class="clinic-sub">Tel: ${escapeHtml(clinicPhone)}</div>` : ''}
   </div>
-  <div class="divider"></div>
-  <div>Patient: ${receipt.patient}</div>
-  <div>Date: ${receipt.date}</div>
-  ${receipt.invoiceReference ? `<div>Invoice Ref: ${escapeHtml(receipt.invoiceReference)}</div>` : ''}
-  <div class="divider"></div>
-  ${rows}
-  <div>Discount: <span class="right">${receipt.discount > 0 ? '-' + formatValue(formatter, receipt.discount) : '—'}</span></div>
-  <div class="divider"></div>
-  <div style="font-weight:700">Total: <span class="right">${formatValue(formatter, receipt.total)}</span></div>
-  <div class="divider"></div>
-  <div class="center">Thank you for choosing ${receipt.clinicName}</div>
-  ${barcodeSection ? `<div class="divider"></div>${barcodeSection}` : ''}
+  <hr class="solid"/>
+  <div class="meta">Date&nbsp;&nbsp;: ${date}</div>
+  <div class="meta">Patient: ${escapeHtml(patient)}</div>
+  ${invoiceReference ? `<div class="meta">Ref&nbsp;&nbsp;&nbsp;: ${escapeHtml(invoiceReference)}</div>` : ''}
+  <hr class="dashed"/>
+  <table>
+    <thead>
+      <tr>
+        <th style="text-align:left">Item</th>
+        <th style="text-align:center">Qty</th>
+        <th style="text-align:right">Unit</th>
+        <th style="text-align:right">Total</th>
+      </tr>
+    </thead>
+    <tbody>${itemRows}</tbody>
+  </table>
+  <hr class="dashed"/>
+  <table>
+    <tr>
+      <td>Subtotal</td>
+      <td style="text-align:right">${formatValue(formatter, subtotalVal)}</td>
+    </tr>
+    ${discount > 0 ? `<tr><td>Discount</td><td style="text-align:right">- ${formatValue(formatter, discount)}</td></tr>` : ''}
+  </table>
+  <hr class="solid"/>
+  <table>
+    <tr class="total-row">
+      <td>TOTAL</td>
+      <td style="text-align:right">${formatValue(formatter, total)}</td>
+    </tr>
+  </table>
+  <hr class="dashed"/>
+  <div class="footer">
+    <div>*** Thank you for visiting ***</div>
+    <div style="margin-top:2px">${escapeHtml(clinicName || 'Clinic')}</div>
+  </div>
+  ${barcodeSection}
   <script>
-    setTimeout(() => { window.print(); setTimeout(() => window.close(), 100); }, 200);
+    window.onload = function() {
+      setTimeout(function() { window.print(); setTimeout(function() { window.close(); }, 200); }, 300);
+    };
   </script>
 </body>
-</html>
-`;
+</html>`;
+
     win.document.open();
     win.document.write(content);
     win.document.close();
@@ -189,73 +234,106 @@ const InvoicePrintModal = ({
     [lineItems]
   );
 
+  const rawLogoPreview = settings?.logo_url || '';
+  const logoUrl = rawLogoPreview
+    ? (() => { try { return new URL(rawLogoPreview, window.location.href).href; } catch { return rawLogoPreview; } })()
+    : '';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} style={{marginTop:'-35px'}}/>
-      <div className="z-50 w-full max-w-lg rounded-xl bg-white p-6 shadow-lg">
-        <h2 className="text-2xl font-bold mb-4 text-center">{clinicName || 'Clinic Invoice'}</h2>
-        <div className="mb-4 text-sm text-center">
-          {clinicAddress && <div>{clinicAddress}</div>}
-          {clinicPhone && <div>Tel: {clinicPhone}</div>}
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-6">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose}/>
+      {/* Receipt-style preview card */}
+      <div className="relative z-50 w-[320px] rounded-lg bg-white shadow-2xl font-mono text-[12px] text-gray-900 overflow-hidden">
+        {/* Header */}
+        <div className="bg-gray-50 border-b border-dashed border-gray-400 px-4 py-4 text-center">
+          {logoUrl && (
+            <img
+              src={logoUrl}
+              alt="logo"
+              className="mx-auto mb-2"
+              style={{ maxHeight: 64, maxWidth: 120, objectFit: 'contain' }}
+            />
+          )}
+          <div className="text-[15px] font-bold tracking-wide">{clinicName || 'Clinic'}</div>
+          {clinicAddress && <div className="text-[11px] text-gray-600 mt-0.5">{clinicAddress}</div>}
+          {clinicPhone && <div className="text-[11px] text-gray-600">Tel: {clinicPhone}</div>}
         </div>
-        <div className="mb-4 text-sm">
-          <div>Patient: <strong>{invoice.patientName}</strong></div>
-          <div>Date: {new Date().toLocaleString()}</div>
-          {invoiceReference && <div>Invoice Ref: <strong>{invoiceReference}</strong></div>}
+
+        {/* Meta */}
+        <div className="px-4 py-2 border-b border-dashed border-gray-400 space-y-0.5">
+          <div>Date&nbsp;&nbsp; : {new Date().toLocaleString()}</div>
+          <div>Patient : <strong>{invoice.patientName || 'Walk-in Customer'}</strong></div>
+          {invoiceReference && <div>Ref&nbsp;&nbsp;&nbsp;&nbsp; : <strong>{invoiceReference}</strong></div>}
         </div>
-        <table className="w-full mb-4 text-sm">
-          <thead>
-            <tr>
-              <th className="text-left">Description</th>
-              <th className="text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lineItems.map((item, idx) => (
-              <tr key={idx} className="border-t">
-                <td>{item.label} <span className="text-xs text-slate-500">(x{item.qty})</span></td>
-                <td className="text-right">{formatValue(formatter, item.unit * item.qty)}</td>
+
+        {/* Items */}
+        <div className="px-4 py-2 border-b border-dashed border-gray-400">
+          <table className="w-full">
+            <thead>
+              <tr className="text-[10px] uppercase text-gray-500 border-b border-gray-300">
+                <th className="text-left py-1">Item</th>
+                <th className="text-center py-1">Qty</th>
+                <th className="text-right py-1">Unit</th>
+                <th className="text-right py-1">Total</th>
               </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="border-t font-semibold">
-              <td colSpan="1" className="text-right">Subtotal</td>
-              <td className="text-right">{formatValue(formatter, subtotal)}</td>
-            </tr>
-            <tr className="text-sm">
-              <td colSpan="1" className="text-right">Discount</td>
-              <td className="text-right">{invoice.discount > 0 ? `- ${formatValue(formatter, invoice.discount)}` : '—'}</td>
-            </tr>
-            <tr className="border-t text-lg font-bold">
-              <td colSpan="1" className="text-right">Total</td>
-              <td className="text-right">{formatValue(formatter, invoice.estimated)}</td>
-            </tr>
-          </tfoot>
-        </table>
-        {smsMessage && (
-          <p className={`mb-4 text-sm ${smsStatus === 'success' ? 'text-emerald-600' : 'text-rose-600'}`}>
-            {smsMessage}
-          </p>
-        )}
+            </thead>
+            <tbody>
+              {lineItems.map((item, idx) => (
+                <tr key={idx} className="border-t border-gray-100">
+                  <td className="py-1 pr-1 leading-tight">{item.label}</td>
+                  <td className="text-center py-1">{item.qty}</td>
+                  <td className="text-right py-1 whitespace-nowrap">{formatValue(formatter, item.unit)}</td>
+                  <td className="text-right py-1 whitespace-nowrap">{formatValue(formatter, item.unit * item.qty)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Totals */}
+        <div className="px-4 py-2 border-b border-dashed border-gray-400">
+          <div className="flex justify-between">
+            <span>Subtotal</span>
+            <span>{formatValue(formatter, subtotal)}</span>
+          </div>
+          {Number(invoice.discount) > 0 && (
+            <div className="flex justify-between text-rose-600">
+              <span>Discount</span>
+              <span>- {formatValue(formatter, invoice.discount)}</span>
+            </div>
+          )}
+        </div>
+        <div className="px-4 py-2 border-b-2 border-gray-800">
+          <div className="flex justify-between text-[15px] font-bold">
+            <span>TOTAL</span>
+            <span>{formatValue(formatter, invoice.estimated)}</span>
+          </div>
+        </div>
+
+        {/* Barcode */}
         {barcodeMarkup && (
-          <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-2">
-            <div className="text-[11px] text-slate-500 text-center mb-1">Scan this barcode for customer return</div>
+          <div className="px-4 py-2 border-b border-dashed border-gray-400 text-center">
+            <div className="text-[10px] text-gray-400 mb-1">Scan for return / exchange</div>
             <div className="flex justify-center" dangerouslySetInnerHTML={{ __html: barcodeMarkup }} />
           </div>
         )}
-        <div className="flex flex-wrap justify-end gap-2">
-          <button className="btn btn-ghost" onClick={onClose}>Close</button>
-          {/* {onSendSms && (
-            <button
-              className="btn btn-secondary"
-              onClick={onSendSms}
-              disabled={smsSending}
-            >
-              {smsSending ? 'Sending…' : 'Send SMS'}
-            </button>
-          )} */}
-          <button className="btn btn-primary" onClick={handleThermalPrint}>Print Now</button>
+
+        {/* Footer */}
+        <div className="px-4 py-3 text-center text-[11px] text-gray-500 border-b border-dashed border-gray-400">
+          <div className="font-semibold">*** Thank you for visiting ***</div>
+          <div>{clinicName}</div>
+        </div>
+
+        {smsMessage && (
+          <div className={`px-4 py-2 text-[11px] ${smsStatus === 'success' ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {smsMessage}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex justify-end gap-2 px-4 py-3 bg-gray-50">
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Close</button>
+          <button className="btn btn-primary btn-sm" onClick={handleThermalPrint}>🖨 Print</button>
         </div>
       </div>
     </div>

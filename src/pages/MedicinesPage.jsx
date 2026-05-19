@@ -1,11 +1,24 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
+import JsBarcode from 'jsbarcode';
 import EntityTable from '../components/EntityTable.jsx';
 import useEntityApi from '../hooks/useEntityApi.js';
 import BrandModal from '../components/BrandModal.jsx';
 import api from '../api/client.js';
 
 const currencyFormatter = new Intl.NumberFormat('en-LK', { style: 'currency', currency: 'LKR' });
+
+const buildBarcodeSvg = (value) => {
+  const v = String(value || '').trim();
+  if (!v || typeof document === 'undefined') return '';
+  try {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    JsBarcode(svg, v, { format: 'CODE128', lineColor: '#000', width: 1, height: 28, displayValue: true, fontSize: 7, margin: 2, background: '#ffffff' });
+    return svg.outerHTML;
+  } catch {
+    return '';
+  }
+};
 
 const createEmptyBatch = () => ({
   id: null,
@@ -229,6 +242,62 @@ const MedicinesPage = () => {
       const nextBrands = prev.brands.filter((_, idx) => idx !== index);
       return { ...prev, brands: nextBrands.length ? nextBrands : [createEmptyBrand()] };
     });
+  };
+
+  const handlePrintBarcode = (brand, index) => {
+    let barcodeValue = (brand.barcode || '').trim();
+
+    if (!barcodeValue) {
+      if (!brand.id) {
+        setFormError('Save the item first so a numeric barcode ID can be assigned.');
+        return;
+      }
+      barcodeValue = String(brand.id);
+      setFormState((prev) => ({
+        ...prev,
+        brands: prev.brands.map((b, i) => (i === index ? { ...b, barcode: barcodeValue } : b))
+      }));
+    }
+
+    const svgMarkup = buildBarcodeSvg(barcodeValue);
+    if (!svgMarkup) {
+      setFormError('Failed to generate barcode.');
+      return;
+    }
+
+    const medicineName = formState.name || '';
+    const brandName = brand.name || '';
+    const price = currencyFormatter.format(brand.price || 0);
+
+    const win = window.open('', '_blank', 'width=200,height=160');
+    if (!win) return;
+
+    win.document.open();
+    win.document.write(`<!DOCTYPE html>
+<html><head>
+  <meta charset="utf-8"/>
+  <title>Barcode</title>
+  <style>
+    @page { size: 30mm 20mm; margin: 0; }
+    * { box-sizing: border-box; }
+    body { font-family: sans-serif; margin: 0; padding: 1mm; width: 30mm; height: 20mm; overflow: hidden; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .med   { font-size: 5.5pt; color: #444; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 28mm; }
+    .brand { font-size: 7pt; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 28mm; }
+    .price { font-size: 6pt; color: #222; line-height: 1.1; margin-bottom: 0.5mm; }
+    svg    { max-width: 28mm; }
+  </style>
+</head><body>
+  <div class="med">${medicineName}</div>
+  <div class="brand">${brandName}</div>
+  <div class="price">${price}</div>
+  ${svgMarkup}
+  <script>
+    window.onload = function() {
+      setTimeout(function() { window.print(); setTimeout(function() { window.close(); }, 200); }, 300);
+    };
+  </script>
+</body></html>`);
+    win.document.close();
   };
 
   const handleOpenBrandModal = (index) => {
@@ -709,6 +778,14 @@ const MedicinesPage = () => {
                         </div>
                       </div>
                       <div className="flex gap-2 flex-shrink-0">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline"
+                          onClick={() => handlePrintBarcode(brand, index)}
+                          title="Print barcode label"
+                        >
+                          🏷️
+                        </button>
                         <button
                           type="button"
                           className="btn btn-sm btn-outline"

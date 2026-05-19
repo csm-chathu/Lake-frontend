@@ -27,8 +27,7 @@ const createEmptySale = () => ({
 const DirectSalesPage = () => {
   const { settings } = useClinicSettings();
   const directSalesApi = useEntityApi('direct-sales');
-  // Only fetch items with type 'item' for direct sale
-  const medicinesApi = useEntityApi('medicines', { type: 'item' });
+  const medicinesApi = useEntityApi('medicines');
 
 
   const { createItem: createDirectSale, error: directSalesError, refresh: refreshDirectSales } = directSalesApi;
@@ -71,16 +70,13 @@ const DirectSalesPage = () => {
           value: String(brand.id),
           label: `${medicine.name} — ${brand.name}`,
           price: Number(brand.price) || 0,
-          barcode: typeof brand.barcode === 'string' ? brand.barcode.trim() : '',
+          barcode: String(brand.barcode ?? '').trim(),
           barcodes: Array.from(
             new Set(
               [
-                typeof brand.barcode === 'string' ? brand.barcode.trim() : '',
-                ...((Array.isArray(brand.batches)
-                  ? brand.batches
-                  : []
-                )
-                  .map((batch) => (typeof batch?.barcode === 'string' ? batch.barcode.trim() : ''))
+                String(brand.barcode ?? '').trim(),
+                ...((Array.isArray(brand.batches) ? brand.batches : [])
+                  .map((batch) => String(batch?.barcode ?? '').trim())
                   .filter(Boolean))
               ].filter(Boolean)
             )

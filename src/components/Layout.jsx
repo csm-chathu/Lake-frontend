@@ -15,6 +15,7 @@ const Layout = ({ children }) => {
   const pendingMutations = useIsMutating();
   const showLoader = pendingQueries + pendingMutations > 0;
   const [isCashierMenuOpen, setIsCashierMenuOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const onLoginPage = location.pathname === '/login';
   const showWatermark = !onLoginPage;
@@ -25,7 +26,11 @@ const Layout = ({ children }) => {
       {!onLoginPage && auth && auth.user && !isCashier ? <Sidebar /> : null}
       <div className="flex-1 flex flex-col bg-white">
         {!onLoginPage && auth && auth.user ? (
-          <Navbar isCashier={isCashier} onToggleCashierMenu={() => setIsCashierMenuOpen((prev) => !prev)} />
+          <Navbar
+            isCashier={isCashier}
+            onToggleCashierMenu={() => setIsCashierMenuOpen((prev) => !prev)}
+            onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+          />
         ) : null}
         <main className={`flex-1 overflow-y-auto relative ${onLoginPage ? '' : 'px-6 py-10 lg:px-12 lg:py-12'}`}>
           <div className={`${onLoginPage ? '' : 'mx-auto w-full max-w-8xl space-y-8'} relative`}>{children}</div>
@@ -49,6 +54,30 @@ const Layout = ({ children }) => {
                 🧾 Direct Sales
               </Link>
             </div>
+          ) : null}
+
+          {!onLoginPage && auth?.user && !isCashier && isSidebarOpen ? (
+            <>
+              <button
+                type="button"
+                className="fixed inset-0 z-40 bg-black/30 lg:hidden"
+                onClick={() => setIsSidebarOpen(false)}
+                aria-label="Close sidebar"
+              />
+              <aside className="fixed left-0 top-0 z-50 flex h-full w-64 flex-col border-r border-slate-800 bg-black text-slate-100 shadow-2xl lg:hidden">
+                <div className="flex items-center justify-between border-b border-slate-800 px-4 py-4">
+                  <p className="text-sm font-semibold tracking-wide">{settings?.name}</p>
+                  <button
+                    type="button"
+                    className="btn btn-xs btn-outline"
+                    onClick={() => setIsSidebarOpen(false)}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <Sidebar onNavClick={() => setIsSidebarOpen(false)} mobile />
+              </aside>
+            </>
           ) : null}
 
           {!onLoginPage && auth?.user && isCashier && isCashierMenuOpen ? (

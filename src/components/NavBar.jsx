@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useClinicSettings } from '../context/ClinicSettingsContext.jsx';
 
-const Navbar = ({ isCashier = false, onToggleCashierMenu = () => {} }) => {
+const Navbar = ({ isCashier = false, onToggleCashierMenu = () => {}, onToggleSidebar = () => {} }) => {
   const auth = useAuth();
   const { settings } = useClinicSettings();
 
@@ -27,7 +27,11 @@ const Navbar = ({ isCashier = false, onToggleCashierMenu = () => {} }) => {
                 🏠 Home
               </Link>
             </>
-          ) : null}
+          ) : (
+            <button type="button" className="btn btn-sm btn-outline lg:hidden" onClick={onToggleSidebar} aria-label="Open sidebar">
+              ☰
+            </button>
+          )}
           <div>
           <p className="text-[11px] uppercase tracking-[0.3em] text-slate-400">{settings?.name}</p>
           <p className="text-lg font-semibold text-slate-900">{settings?.tagline}</p>
