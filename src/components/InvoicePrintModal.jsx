@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import JsBarcode from 'jsbarcode';
 import { useClinicSettings } from '../context/ClinicSettingsContext.jsx';
 
@@ -54,9 +54,7 @@ const InvoicePrintModal = ({
   smsStatus = null,
   smsMessage = ''
 }) => {
-  if (!open || !invoice) {
-    return null;
-  }
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const { settings } = useClinicSettings();
   const clinicName = settings?.name;
@@ -79,128 +77,9 @@ const InvoicePrintModal = ({
     [invoiceReference]
   );
 
-  const handleBrowserPrint = () => {
-    window.print();
-  };
-
-  const handleThermalPrint = () => {
-    const rawLogo = settings?.logo_url || '';
-    const logoUrl = rawLogo
-      ? (() => { try { return new URL(rawLogo, window.location.href).href; } catch { return rawLogo; } })()
-      : '';
-    const date = new Date().toLocaleString();
-    const patient = invoice.patientName || 'Walk-in Customer';
-    const discount = Number(invoice.discount) || 0;
-    const total = Number(invoice.estimated) || 0;
-
-    const win = window.open('', '_blank', 'width=360,height=700');
-    if (!win) return;
-
-    const logoHtml = logoUrl
-      ? `<img src="${escapeHtml(logoUrl)}" alt="logo" style="max-width:90px;max-height:60px;object-fit:contain;margin-bottom:4px" />`
-      : '';
-
-    const itemRows = lineItems.map((item) => {
-      const lineTotal = item.qty * item.unit;
-      return `
-        <tr>
-          <td style="padding:3px 2px">${escapeHtml(item.label)}</td>
-          <td style="text-align:center;padding:3px 2px">${item.qty}</td>
-          <td style="text-align:right;padding:3px 2px">${formatValue(formatter, item.unit)}</td>
-          <td style="text-align:right;padding:3px 2px">${formatValue(formatter, lineTotal)}</td>
-        </tr>`;
-    }).join('');
-
-    const subtotalVal = lineItems.reduce((s, i) => s + i.qty * i.unit, 0);
-
-    const barcodeSection = invoiceReference && barcodeMarkup
-      ? `<div style="margin-top:8px;text-align:center"><div style="font-size:10px;margin-bottom:2px">Ref: ${escapeHtml(invoiceReference)}</div>${barcodeMarkup}</div>`
-      : '';
-
-    const content = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <title>Receipt</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { font-family: 'Courier New', monospace; font-size: 12px; margin: 0; padding: 10px; width: 300px; color: #111; }
-    .center { text-align: center; }
-    .dashed { border: none; border-top: 1px dashed #555; margin: 6px 0; }
-    .solid  { border: none; border-top: 2px solid #111; margin: 6px 0; }
-    .clinic-name { font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
-    .clinic-sub  { font-size: 11px; color: #333; margin-top: 2px; }
-    table { width: 100%; border-collapse: collapse; }
-    th { font-size: 10px; text-transform: uppercase; padding: 3px 2px; border-bottom: 1px solid #555; }
-    td { font-size: 11px; vertical-align: top; }
-    .total-row td { font-size: 13px; font-weight: 700; padding-top: 4px; }
-    .meta { font-size: 11px; margin: 2px 0; }
-    .footer { font-size: 11px; text-align: center; margin-top: 6px; }
-    @media print {
-      body { width: auto; padding: 0; }
-      @page { margin: 4mm; }
-    }
-  </style>
-</head>
-<body>
-  <div class="center">
-    ${logoHtml}
-    <div class="clinic-name">${escapeHtml(clinicName || 'Clinic')}</div>
-    ${clinicAddress ? `<div class="clinic-sub">${escapeHtml(clinicAddress)}</div>` : ''}
-    ${clinicPhone ? `<div class="clinic-sub">Tel: ${escapeHtml(clinicPhone)}</div>` : ''}
-  </div>
-  <hr class="solid"/>
-  <div class="meta">Date&nbsp;&nbsp;: ${date}</div>
-  <div class="meta">Patient: ${escapeHtml(patient)}</div>
-  ${invoiceReference ? `<div class="meta">Ref&nbsp;&nbsp;&nbsp;: ${escapeHtml(invoiceReference)}</div>` : ''}
-  <hr class="dashed"/>
-  <table>
-    <thead>
-      <tr>
-        <th style="text-align:left">Item</th>
-        <th style="text-align:center">Qty</th>
-        <th style="text-align:right">Unit</th>
-        <th style="text-align:right">Total</th>
-      </tr>
-    </thead>
-    <tbody>${itemRows}</tbody>
-  </table>
-  <hr class="dashed"/>
-  <table>
-    <tr>
-      <td>Subtotal</td>
-      <td style="text-align:right">${formatValue(formatter, subtotalVal)}</td>
-    </tr>
-    ${discount > 0 ? `<tr><td>Discount</td><td style="text-align:right">- ${formatValue(formatter, discount)}</td></tr>` : ''}
-  </table>
-  <hr class="solid"/>
-  <table>
-    <tr class="total-row">
-      <td>TOTAL</td>
-      <td style="text-align:right">${formatValue(formatter, total)}</td>
-    </tr>
-  </table>
-  <hr class="dashed"/>
-  <div class="footer">
-    <div>*** Thank you for visiting ***</div>
-    <div style="margin-top:2px">${escapeHtml(clinicName || 'Clinic')}</div>
-  </div>
-  ${barcodeSection}
-  <script>
-    window.onload = function() {
-      setTimeout(function() { window.print(); setTimeout(function() { window.close(); }, 200); }, 300);
-    };
-  </script>
-</body>
-</html>`;
-
-    win.document.open();
-    win.document.write(content);
-    win.document.close();
-  };
-
   // build table rows for line items if provided
   const lineItems = useMemo(() => {
+    if (!invoice) return [];
     if (Array.isArray(invoice.lineItems) && invoice.lineItems.length > 0) {
       return invoice.lineItems.map((item) => ({
         label: item.label || 'Item',
@@ -210,12 +89,10 @@ const InvoicePrintModal = ({
     }
 
     const items = [];
-    // only show combined medicine charge
     if (invoice.medicinesSubtotal != null) {
       const qty = Array.isArray(invoice.medicines) ? invoice.medicines.length : 1;
       items.push({ label: 'Medicine charge', qty, unit: invoice.medicinesSubtotal });
     }
-    // include doctor and surgery as pseudo-items for display
     if (showDoctorCharge) {
       items.push({ label: 'Doctor charge', qty: 1, unit: invoice.doctorCharge || 0 });
     }
@@ -238,6 +115,111 @@ const InvoicePrintModal = ({
   const logoUrl = rawLogoPreview
     ? (() => { try { return new URL(rawLogoPreview, window.location.href).href; } catch { return rawLogoPreview; } })()
     : '';
+
+  if (!open || !invoice) {
+    return null;
+  }
+
+  const buildReceiptHtml = () => {
+    const rawLogo = settings?.logo_url || '';
+    const logoUrl = rawLogo
+      ? (() => { try { return new URL(rawLogo, window.location.href).href; } catch { return rawLogo; } })()
+      : '';
+    const logoHtml = logoUrl
+      ? `<img src="${escapeHtml(logoUrl)}" alt="logo" style="max-width:90px;max-height:60px;object-fit:contain;margin-bottom:4px" />`
+      : '';
+    const date = new Date().toLocaleString();
+    const patient = invoice.patientName || 'Walk-in Customer';
+    const discount = Number(invoice.discount) || 0;
+    const total = Number(invoice.estimated) || 0;
+    const subtotalVal = lineItems.reduce((s, i) => s + i.qty * i.unit, 0);
+    const itemRows = lineItems.map((item) => {
+      const lineTotal = item.qty * item.unit;
+      return `<tr>
+        <td style="padding:3px 2px">${escapeHtml(item.label)}</td>
+        <td style="text-align:center;padding:3px 2px">${item.qty}</td>
+        <td style="text-align:right;padding:3px 2px">${formatValue(formatter, item.unit)}</td>
+        <td style="text-align:right;padding:3px 2px">${formatValue(formatter, lineTotal)}</td>
+      </tr>`;
+    }).join('');
+    const barcodeSection = invoiceReference && barcodeMarkup
+      ? `<div style="margin-top:8px;text-align:center"><div style="font-size:10px;margin-bottom:2px">Ref: ${escapeHtml(invoiceReference)}</div>${barcodeMarkup}</div>`
+      : '';
+
+    return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><title>Receipt</title>
+<style>
+  @page { size: 80mm auto; margin: 3mm 2mm; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Courier New', monospace; font-size: 12px; margin: 0; padding: 0; width: 76mm; color: #111; }
+  .center { text-align: center; }
+  .dashed { border: none; border-top: 1px dashed #555; margin: 5px 0; }
+  .solid  { border: none; border-top: 2px solid #111; margin: 5px 0; }
+  .clinic-name { font-size: 15px; font-weight: 700; }
+  .clinic-sub  { font-size: 11px; color: #333; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 10px; text-transform: uppercase; padding: 3px 2px; border-bottom: 1px solid #555; }
+  td { font-size: 11px; vertical-align: top; }
+  .total-row td { font-size: 13px; font-weight: 700; padding-top: 4px; }
+  .meta { font-size: 11px; margin: 2px 0; }
+  .footer { font-size: 11px; text-align: center; margin-top: 6px; }
+</style>
+</head><body>
+  <div class="center">
+    ${logoHtml}
+    <div class="clinic-name">${escapeHtml(clinicName || 'Clinic')}</div>
+    ${clinicAddress ? `<div class="clinic-sub">${escapeHtml(clinicAddress)}</div>` : ''}
+    ${clinicPhone ? `<div class="clinic-sub">Tel: ${escapeHtml(clinicPhone)}</div>` : ''}
+  </div>
+  <hr class="solid"/>
+  <div class="meta">Date&nbsp;&nbsp;: ${date}</div>
+  <div class="meta">Patient: ${escapeHtml(patient)}</div>
+  ${invoiceReference ? `<div class="meta">Ref&nbsp;&nbsp;&nbsp;: ${escapeHtml(invoiceReference)}</div>` : ''}
+  <hr class="dashed"/>
+  <table>
+    <thead><tr>
+      <th style="text-align:left">Item</th>
+      <th style="text-align:center">Qty</th>
+      <th style="text-align:right">Unit</th>
+      <th style="text-align:right">Total</th>
+    </tr></thead>
+    <tbody>${itemRows}</tbody>
+  </table>
+  <hr class="dashed"/>
+  <table>
+    <tr><td>Subtotal</td><td style="text-align:right">${formatValue(formatter, subtotalVal)}</td></tr>
+    ${discount > 0 ? `<tr><td>Discount</td><td style="text-align:right">- ${formatValue(formatter, discount)}</td></tr>` : ''}
+  </table>
+  <hr class="solid"/>
+  <table>
+    <tr class="total-row"><td>TOTAL</td><td style="text-align:right">${formatValue(formatter, total)}</td></tr>
+  </table>
+  <hr class="dashed"/>
+  <div class="footer"><div>*** Thank you for visiting ***</div><div>${escapeHtml(clinicName || 'Clinic')}</div></div>
+  ${barcodeSection}
+</body></html>`;
+  };
+
+  const handleThermalPrint = async () => {
+    setIsPrinting(true);
+    try {
+      if (window.electronAPI?.printReceipt) {
+        const result = await window.electronAPI.printReceipt(buildReceiptHtml());
+        console.log('[printReceipt] result:', result);
+        return;
+      }
+
+      // Browser fallback
+      const win = window.open('', '_blank', 'width=360,height=700');
+      if (!win) return;
+      const html = buildReceiptHtml().replace('</body>', `<script>window.onload=function(){setTimeout(function(){window.print();setTimeout(function(){window.close();},200);},300);};<\/script></body>`);
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+    } finally {
+      setIsPrinting(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-6">
@@ -332,8 +314,12 @@ const InvoicePrintModal = ({
 
         {/* Actions */}
         <div className="flex justify-end gap-2 px-4 py-3 bg-gray-50">
-          <button className="btn btn-ghost btn-sm" onClick={onClose}>Close</button>
-          <button className="btn btn-primary btn-sm" onClick={handleThermalPrint}>🖨 Print</button>
+          <button className="btn btn-ghost btn-sm" onClick={onClose} disabled={isPrinting}>Close</button>
+          <button className="btn btn-primary btn-sm" onClick={handleThermalPrint} disabled={isPrinting}>
+            {isPrinting
+              ? <><span className="loading loading-spinner loading-xs" /> Printing...</>
+              : '🖨 Print'}
+          </button>
         </div>
       </div>
     </div>

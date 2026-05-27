@@ -269,11 +269,7 @@ const MedicinesPage = () => {
     const brandName = brand.name || '';
     const price = currencyFormatter.format(brand.price || 0);
 
-    const win = window.open('', '_blank', 'width=200,height=160');
-    if (!win) return;
-
-    win.document.open();
-    win.document.write(`<!DOCTYPE html>
+    const barcodeHtml = `<!DOCTYPE html>
 <html><head>
   <meta charset="utf-8"/>
   <title>Barcode</title>
@@ -291,12 +287,17 @@ const MedicinesPage = () => {
   <div class="brand">${brandName}</div>
   <div class="price">${price}</div>
   ${svgMarkup}
-  <script>
-    window.onload = function() {
-      setTimeout(function() { window.print(); setTimeout(function() { window.close(); }, 200); }, 300);
-    };
-  </script>
-</body></html>`);
+</body></html>`;
+
+    if (window.electronAPI?.printBarcode) {
+      window.electronAPI.printBarcode(barcodeHtml);
+      return;
+    }
+
+    const win = window.open('', '_blank', 'width=200,height=160');
+    if (!win) return;
+    win.document.open();
+    win.document.write(barcodeHtml.replace('</body>', `<script>window.onload=function(){setTimeout(function(){window.print();setTimeout(function(){window.close();},200)},300)}</script></body>`));
     win.document.close();
   };
 

@@ -8,8 +8,8 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const { settings } = useClinicSettings();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@lakeclinic.test');
+  const [password, setPassword] = useState('Admin123!');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -63,7 +63,7 @@ export default function LoginPage() {
               <h2 className="clinic-name">{settings?.name}</h2>
               <p className="clinic-subtitle">{settings?.pos_description || 'Veterinary Management System'}</p>
             </div>
- {error && <div className="alert alert-error mb-4">{error}</div>}
+            {error && <div className="alert alert-error mb-4">{error}</div>}
             {/* Login Form */}
             <form onSubmit={handleSubmit}>
               {/* Email Field */}

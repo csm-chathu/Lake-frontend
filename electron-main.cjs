@@ -1,6 +1,123 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const { exec } = require('child_process');
 const backend = require('./start-backend.cjs');
+
+// ── Printer config helpers ────────────────────────────────────────────────────
+function getConfigPath() {
+  return path.join(__dirname, 'printer-config.json');
+}
+
+function readPrinterConfig() {
+  if (fs.existsSync(getConfigPath())) {
+    return JSON.parse(fs.readFileSync(getConfigPath(), 'utf8'));
+  }
+  return { pos: {}, barcode: {} };
+}
+
+// ── IPC: read / write config ──────────────────────────────────────────────────
+ipcMain.handle('printers:get-config', () => readPrinterConfig());
+
+ipcMain.handle('printers:save-config', (_event, config) => {
+  fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
+  return { success: true };
+});
+
+// ── Find SumatraPDF (bundled next to this file or in app resources) ──────────
+function getSumatraPath() {
+  const candidates = [
+    path.join(__dirname, 'SumatraPDF.exe'),
+    path.join(process.resourcesPath || __dirname, 'SumatraPDF.exe'),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+// ── Silent print: printToPDF → temp PDF → SumatraPDF (or PowerShell fallback) ─
+async function printHtmlToPrinter(html, printerName, renderDelay) {
+  const win = new BrowserWindow({
+    show: false,
+    webPreferences: { javascript: true, sandbox: false },
+  });
+
+  win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+
+  return new Promise((resolve) => {
+    win.webContents.once('did-finish-load', () => {
+      setTimeout(async () => {
+        try {
+          const pdfBuf = await win.webContents.printToPDF({ printBackground: true });
+          win.destroy();
+
+          const stamp = Date.now();
+          const pdfPath = path.join(os.tmpdir(), `vp_${stamp}.pdf`);
+          fs.writeFileSync(pdfPath, pdfBuf);
+
+          const sumatraPath = getSumatraPath();
+
+          if (sumatraPath) {
+            // Fast & reliable: SumatraPDF command-line silent print
+            console.log('[print] SumatraPDF →', printerName);
+            const cmd = `"${sumatraPath}" -print-to "${printerName}" "${pdfPath}"`;
+            exec(cmd, { timeout: 30000 }, (err) => {
+              setTimeout(() => { try { fs.unlinkSync(pdfPath); } catch {} }, 6000);
+              if (err) console.error('[print] SumatraPDF error:', err.message);
+              else console.log('[print] done');
+              resolve({ success: !err, error: err ? err.message : null });
+            });
+          } else {
+            // Fallback: PowerShell Shell.Application (unreliable — place SumatraPDF.exe next to electron-main.cjs)
+            console.warn('[print] SumatraPDF.exe not found — falling back to PowerShell (may not print)');
+            const psPath = path.join(os.tmpdir(), `vp_${stamp}.ps1`);
+            const esc = (s) => s.replace(/'/g, "''");
+            const psScript = [
+              `$f = '${esc(pdfPath)}'`,
+              `$p = '${esc(printerName)}'`,
+              `$s = New-Object -ComObject Shell.Application`,
+              `$d = $s.NameSpace([System.IO.Path]::GetDirectoryName($f))`,
+              `$i = $d.ParseName([System.IO.Path]::GetFileName($f))`,
+              `$i.InvokeVerbEx('Print To', $p)`,
+              `Start-Sleep -Seconds 8`,
+              `Remove-Item -LiteralPath $f -Force -EA 0`,
+            ].join('\r\n');
+            fs.writeFileSync(psPath, psScript, 'utf8');
+            exec(
+              `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${psPath}"`,
+              { timeout: 45000 },
+              (err) => {
+                try { fs.unlinkSync(psPath); } catch {}
+                if (err) console.error('[print] PowerShell error:', err.message);
+                else console.log('[print] done (PowerShell)');
+                resolve({ success: !err, error: err ? err.message : null });
+              }
+            );
+          }
+        } catch (e) {
+          try { win.destroy(); } catch {}
+          console.error('[print] error:', e.message);
+          resolve({ success: false, error: e.message });
+        }
+      }, renderDelay);
+    });
+  });
+}
+
+// ── IPC: POS receipt ──────────────────────────────────────────────────────────
+ipcMain.handle('printers:print-receipt', async (_event, html) => {
+  const { pos = {} } = readPrinterConfig();
+  return printHtmlToPrinter(html, pos.name || '', 300);
+});
+
+// ── IPC: barcode label ────────────────────────────────────────────────────────
+ipcMain.handle('printers:print-barcode', async (_event, html) => {
+  const { barcode = {} } = readPrinterConfig();
+  return printHtmlToPrinter(html, barcode.name || '', 500);
+});
+
 
 let win;
 let splashWindow;

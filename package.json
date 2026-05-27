@@ -7,7 +7,7 @@
     "main": "electron-main.cjs",
     "type": "module",
     "scripts": {
-        "dev": "concurrently \"vite\" \"electron .\"",
+        "dev": "cross-env NODE_ENV=development concurrently \"vite\" \"electron .\"",
         "prebuild": "node scripts/clean.cjs",
         "build": "npm run prebuild && vite build",
         "preview": "vite preview",
@@ -33,7 +33,8 @@
             "electron-main.cjs",
             "preload.js",
             "start-backend.cjs",
-            "mysql/**/*"
+            "mysql/**/*",
+            "SumatraPDF.exe"
         ],
         "extraResources": [
             {
