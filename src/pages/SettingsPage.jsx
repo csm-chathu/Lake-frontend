@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import useEntityApi from '../hooks/useEntityApi.js';
+import client from '../api/client.js';
+
+const IS_ELECTRON = Boolean(window.electronAPI?.isElectron);
+const MAINTENANCE_KEY = 'MyStrongRandomKey123';
 
 // ── Menu config — add new sections/items here ─────────────────────────────────
 const MENU = [
@@ -10,6 +14,12 @@ const MENU = [
       { id: 'surgery',    label: 'Surgery Charges',     icon: '🔪' },
       { id: 'disposable', label: 'Disposable Charges',  icon: '🧤' },
       { id: 'discount',   label: 'Discounts',           icon: '🏷️' },
+    ],
+  },
+  {
+    section: 'System',
+    items: [
+      { id: 'database', label: 'Database', icon: '🗄️' },
     ],
   },
 ];
@@ -134,6 +144,63 @@ const PresetPanel = ({ title, valueLabel = 'Value (LKR)', items, loading, error,
   );
 };
 
+// ── Database maintenance panel (Electron only) ────────────────────────────────
+const DatabasePanel = () => {
+  const [status, setStatus] = useState(null); // null | 'running' | 'ok' | 'error'
+  const [output, setOutput] = useState('');
+
+  const runMigrate = async () => {
+    setStatus('running');
+    setOutput('');
+    try {
+      const res = await client.post('/system/migrate', {}, {
+        headers: { 'X-Maintenance-Key': MAINTENANCE_KEY },
+      });
+      setOutput(res.data?.output || res.data?.message || 'Done.');
+      setStatus('ok');
+    } catch (err) {
+      setOutput(err.message || 'Migration failed.');
+      setStatus('error');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-800">Database</h2>
+        <p className="text-xs text-slate-400 mt-0.5">Run pending migrations to update the database schema.</p>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 space-y-4">
+        <div>
+          <p className="text-sm font-medium text-slate-700">Run Migrations</p>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Applies any new database migrations without losing existing data. Safe to run on updates.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-sm btn-primary rounded-xl px-5"
+          onClick={runMigrate}
+          disabled={status === 'running'}
+        >
+          {status === 'running' ? 'Running…' : 'Run migrations'}
+        </button>
+
+        {status && status !== 'running' && (
+          <div className={`rounded-lg border p-3 text-xs font-mono whitespace-pre-wrap ${
+            status === 'ok'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              : 'border-rose-200 bg-rose-50 text-rose-800'
+          }`}>
+            {output}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 const SettingsPage = () => {
   const [activeId, setActiveId] = useState('doctor');
@@ -197,6 +264,7 @@ const SettingsPage = () => {
         {...makeHandlers(discountApi)}
       />
     ),
+    database: <DatabasePanel />,
   };
 
   return (
