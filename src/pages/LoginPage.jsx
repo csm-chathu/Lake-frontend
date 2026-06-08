@@ -58,7 +58,11 @@ export default function LoginPage() {
             {/* Logo/Header */}
             <div className="form-header">
               <div className="logo-icon">
-                <img src={settings?.logo_url} alt={`${settings?.name} logo`} className="logo-image" />
+                <img
+                  src={settings?.logo_url ? `${window.location.origin}/${settings.logo_url.replace(/^\//, '')}` : ''}
+                  alt={`${settings?.name} logo`}
+                  className="logo-image"
+                />
               </div>
               <h2 className="clinic-name">{settings?.name}</h2>
               <p className="clinic-subtitle">{settings?.pos_description || 'Veterinary Management System'}</p>

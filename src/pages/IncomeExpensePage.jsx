@@ -183,7 +183,15 @@ const IncomeExpensePage = () => {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="6">Loading…</td></tr>
+              [...Array(5)].map((_, i) => (
+                <tr key={i} className="animate-pulse">
+                  {[...Array(6)].map((__, j) => (
+                    <td key={j} className="py-3 px-2">
+                      <div className="h-3 rounded-full bg-slate-100" style={{ width: j === 5 ? '50%' : '75%' }} />
+                    </td>
+                  ))}
+                </tr>
+              ))
             ) : entries.length === 0 ? (
               <tr><td colSpan="6">No records found.</td></tr>
             ) : (

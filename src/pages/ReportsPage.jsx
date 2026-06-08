@@ -188,11 +188,27 @@ const ReportsPage = () => {
       </div>
 
       {loading ? (
-        <div className="rounded-2xl border border-base-300 bg-base-100 p-12 text-center text-slate-500 shadow-sm">
-          <div className="flex justify-center mb-4">
-            <div className="h-12 w-12 rounded-full border-4 border-slate-200 border-t-primary animate-spin" />
+        <div className="space-y-4 animate-pulse">
+          <div className="grid gap-4 md:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
+                <div className="h-3 w-28 rounded-full bg-slate-100" />
+                <div className="h-7 w-20 rounded-lg bg-slate-100" />
+              </div>
+            ))}
           </div>
-          Loading report data…
+          <div className="grid gap-4 md:grid-cols-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
+                <div className="h-3 w-32 rounded-full bg-slate-100" />
+                <div className="h-7 w-20 rounded-lg bg-slate-100" />
+              </div>
+            ))}
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="h-4 w-40 rounded-full bg-slate-100 mb-4" />
+            <div className="h-64 rounded-xl bg-slate-100" />
+          </div>
         </div>
       ) : (
         <>

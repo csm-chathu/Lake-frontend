@@ -636,11 +636,15 @@ const BillingPage = () => {
             </tr>
           </thead>
           <tbody>
-            {loading && (
-              <tr>
-                <td colSpan={9} className="text-center py-10 text-slate-500">Loading…</td>
+            {loading && [...Array(6)].map((_, i) => (
+              <tr key={i} className="animate-pulse">
+                {[...Array(9)].map((__, j) => (
+                  <td key={j} className="py-3 px-2">
+                    <div className="h-3 rounded-full bg-slate-100" style={{ width: j === 0 ? '60%' : j === 8 ? '40%' : '80%' }} />
+                  </td>
+                ))}
               </tr>
-            )}
+            ))}
             {!loading && invoices.length === 0 && (
               <tr>
                 <td colSpan={9} className="text-center py-10 text-slate-500">No invoices found.</td>

@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { AlertTriangle, PackageOpen, Scissors, Stethoscope, Tag, WalletCards, Wrench } from 'lucide-react';
 import useEntityApi from '../hooks/useEntityApi.js';
 import { calculateMedicinesTotal } from './AppointmentMedicineSelector.jsx';
 import PaymentFooter from './PaymentFooter.jsx';
@@ -6,11 +7,40 @@ import PaymentFooter from './PaymentFooter.jsx';
 const currencyFormatter = new Intl.NumberFormat('en-LK', { style: 'currency', currency: 'LKR' });
 
 const capitalizeFirstLetter = (string) => {
-  if (typeof string !== 'string' || string.length === 0) {
-    return string;
-  }
+  if (typeof string !== 'string' || string.length === 0) return string;
   return string.charAt(0).toUpperCase() + string.slice(1);
 };
+
+const inputClass =
+  'input input-xs input-bordered w-24 bg-white text-xs text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100';
+
+function PresetButton({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-md border px-2 py-0.5 text-left transition ${
+        active
+          ? 'border-blue-400 bg-blue-50 text-blue-700 shadow-sm'
+          : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SectionCard({ icon: Icon, label, children }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <Icon size={11} className="text-slate-400" />
+        <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
 
 export default function AppointmentChargesSummary({
   formState,
@@ -21,37 +51,33 @@ export default function AppointmentChargesSummary({
   disposableChargePresets: disposableChargePresetsProp = [],
   paymentStatusOptions = []
 }) {
-  // Load disposable charge presets from API if not provided
-  const { items: disposableChargePresetsApi, loading: disposableLoading } = useEntityApi('disposabal-charge-presets');
+  const { items: disposableChargePresetsApi } = useEntityApi('disposabal-charge-presets');
   const disposableChargePresets =
     Array.isArray(disposableChargePresetsProp) && disposableChargePresetsProp.length
       ? disposableChargePresetsProp
       : (Array.isArray(disposableChargePresetsApi) ? disposableChargePresetsApi.filter((p) => p.active !== false) : []);
-  
+
   const { items: discountsApi, loading: discountsLoading } = useEntityApi('discounts');
   const discounts = Array.isArray(discountsApi) ? discountsApi.filter((d) => d.active !== false) : [];
 
-  // compute derived values locally so callers don't need to already calculate them
   const doctorChargeValue = useMemo(() => {
-    const parsed = Number.parseFloat(formState.doctorCharge);
-    return Number.isNaN(parsed) ? 0 : parsed;
+    const p = Number.parseFloat(formState.doctorCharge);
+    return Number.isNaN(p) ? 0 : p;
   }, [formState.doctorCharge]);
 
   const surgeryChargeValue = useMemo(() => {
-    const parsed = Number.parseFloat(formState.surgeryCharge);
-    return Number.isNaN(parsed) ? 0 : parsed;
+    const p = Number.parseFloat(formState.surgeryCharge);
+    return Number.isNaN(p) ? 0 : p;
   }, [formState.surgeryCharge]);
 
-
   const serviceChargeValue = useMemo(() => {
-    const parsed = Number.parseFloat(formState.otherCharge);
-    return Number.isNaN(parsed) ? 0 : parsed;
+    const p = Number.parseFloat(formState.otherCharge);
+    return Number.isNaN(p) ? 0 : p;
   }, [formState.otherCharge]);
 
-  // Disposable Charge
   const disposableChargeValue = useMemo(() => {
-    const parsed = Number.parseFloat(formState.disposableCharge);
-    return Number.isNaN(parsed) ? 0 : parsed;
+    const p = Number.parseFloat(formState.disposableCharge);
+    return Number.isNaN(p) ? 0 : p;
   }, [formState.disposableCharge]);
 
   const medicinesTotal = useMemo(
@@ -60,8 +86,8 @@ export default function AppointmentChargesSummary({
   );
 
   const discountValue = useMemo(() => {
-    const parsed = Number.parseFloat(formState.discount);
-    return Number.isNaN(parsed) ? 0 : parsed;
+    const p = Number.parseFloat(formState.discount);
+    return Number.isNaN(p) ? 0 : p;
   }, [formState.discount]);
 
   const totalChargeEstimate = useMemo(() => {
@@ -69,337 +95,247 @@ export default function AppointmentChargesSummary({
     return Number(Math.max(gross - discountValue, 0).toFixed(2));
   }, [doctorChargeValue, surgeryChargeValue, serviceChargeValue, disposableChargeValue, medicinesTotal, discountValue]);
 
-  const handleChangeField = (name, value) => {
-    setFormState((prev) => ({ ...prev, [name]: value }));
-  };
+  const set = (name, value) => setFormState((prev) => ({ ...prev, [name]: value }));
+
+  const doctorPresets =
+    Array.isArray(chargePresets) && chargePresets.length
+      ? chargePresets
+      : [
+          { id: 'p1', label: 'Standard', value: 300 },
+          { id: 'p2', label: 'Priority', value: 500 },
+          { id: 'p3', label: 'Default', value: 800 }
+        ];
+
+  const disposablePresets =
+    Array.isArray(disposableChargePresets) && disposableChargePresets.length
+      ? disposableChargePresets
+      : [
+          { id: 'd1', label: 'Standard', value: 100 },
+          { id: 'd2', label: 'Premium', value: 200 }
+        ];
+
+  const surgeryPresets = Array.isArray(surgeryChargePresets)
+    ? surgeryChargePresets.filter((p) => p.active !== false)
+    : [];
+
+  const gross = doctorChargeValue + surgeryChargeValue + serviceChargeValue + disposableChargeValue + medicinesTotal;
 
   return (
-    <div className="rounded-xl border border-base-300 bg-base-100 shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       {/* Header */}
-      <div className="border-b border-base-200 bg-base-200/30 px-5 py-3">
-        <h3 className="text-base font-semibold text-slate-800">💰 Charges Summary</h3>
-        <p className="mt-0.5 text-xs text-slate-500">
-          Configure charges and view real-time totals
-        </p>
+      <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2">
+        <WalletCards size={13} className="text-slate-500" />
+        <h3 className="text-sm font-semibold text-slate-800">Charges &amp; Payment</h3>
       </div>
 
-      <div className="p-5">
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="space-y-4">
-            {/* Doctor Charge */}
-            <div className="rounded-lg border border-base-200 bg-base-50 p-4">
-            <label className="mb-2 block text-sm font-semibold text-slate-700">
-              👨‍⚕️ Doctor Charge
-            </label>
-            <div className="flex flex-wrap items-center gap-2">
-              {(() => {
-                const current = typeof formState.doctorCharge === 'string' ? formState.doctorCharge : '';
-                const numeric = Number.parseFloat(current) || 0;
-                const presetsList =
-                  Array.isArray(chargePresets) && chargePresets.length
-                    ? chargePresets
-                    : [
-                        { id: 'p1', label: 'Standard', value: 300 },
-                        { id: 'p2', label: 'Priority', value: 500 },
-                        { id: 'p3', label: 'Default', value: 800 }
-                      ];
+      <div className="p-2">
+        <div className="grid gap-2 lg:grid-cols-2">
 
-                return (
-                  <>
-                    {presetsList.map((preset) => {
-                      const valueNum = Number(preset.value);
-                      const active = Number(valueNum) === Number(numeric);
-                      return (
-                        <button
-                          type="button"
-                          key={preset.id ?? preset.name ?? preset.value}
-                          className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
-                          onClick={() => handleChangeField('doctorCharge', String(preset.value))}
-                        >
-                          <span className="inline-flex flex-col items-center justify-center min-w-[54px]">
-                            <span className="text-[15px] font-bold leading-tight text-slate-700">
-                              {currencyFormatter.format(preset.value)}
-                            </span>
-                            <span className="text-[10px] leading-none text-slate-500 font-normal">
-                              {preset.label}
-                            </span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-slate-500">or</span>
+          {/* ── LEFT COLUMN ── */}
+          <div className="space-y-1.5">
+
+            {/* Doctor Charge */}
+            <SectionCard icon={Stethoscope} label="Doctor Charge">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(() => {
+                  const current = typeof formState.doctorCharge === 'string' ? formState.doctorCharge : '';
+                  const numeric = Number.parseFloat(current) || 0;
+                  return (
+                    <>
+                      {doctorPresets.map((preset) => {
+                        const active = Number(preset.value) === numeric;
+                        return (
+                          <PresetButton key={preset.id ?? preset.value} active={active} onClick={() => set('doctorCharge', active ? '' : String(preset.value))}>
+                            <span className="block text-xs font-bold leading-tight">{currencyFormatter.format(preset.value)}</span>
+                            <span className="block text-[9px] font-normal opacity-70">{preset.label}</span>
+                          </PresetButton>
+                        );
+                      })}
                       <input
                         type="number"
                         min="0"
                         step="0.01"
                         value={current}
-                        onChange={(e) => handleChangeField('doctorCharge', e.target.value)}
-                        placeholder="Custom amount"
-                        className="input input-sm input-bordered w-36"
+                        onChange={(e) => set('doctorCharge', e.target.value)}
+                        placeholder="Custom"
+                        className={inputClass}
                       />
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-            </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </SectionCard>
 
             {/* Disposable Charge */}
-            <div className="rounded-lg border border-base-200 bg-base-50 p-4">
-              <label className="mb-2 block text-sm font-semibold text-slate-700">
-                🧻 Disposable Charge
-              </label>
-              <div className="flex flex-wrap items-center gap-2">
+            <SectionCard icon={PackageOpen} label="Disposable Charge">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {(() => {
                   const current = typeof formState.disposableCharge === 'string' ? formState.disposableCharge : '';
                   const numeric = Number.parseFloat(current) || 0;
-                  const presetsList =
-                    Array.isArray(disposableChargePresets) && disposableChargePresets.length
-                      ? disposableChargePresets
-                      : [
-                          { id: 'd1', label: 'Standard', value: 100 },
-                          { id: 'd2', label: 'Premium', value: 200 },
-                          { id: 'd3', label: 'Custom', value: 0 }
-                        ];
                   return (
                     <>
-                      {presetsList.map((preset) => {
-                        const valueNum = Number(preset.value);
-                        const active = Number(valueNum) === Number(numeric);
+                      {disposablePresets.map((preset) => {
+                        const active = Number(preset.value) === numeric;
                         return (
-                          <button
-                            type="button"
-                            key={preset.id ?? preset.name ?? preset.value}
-                            className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
-                            onClick={() => handleChangeField('disposableCharge', String(preset.value))}
-                          >
-                            <span className="inline-flex flex-col items-center justify-center min-w-[54px]">
-                              {/* <span className="text-[15px] font-bold leading-tight text-slate-700">
-                                {currencyFormatter.format(preset.value)}
-                              </span> */}
-                              <span className="text-[10px] leading-none text-slate-500 font-normal">
-                                {preset.label}
-                              </span>
-                            </span>
-                          </button>
+                          <PresetButton key={preset.id ?? preset.value} active={active} onClick={() => set('disposableCharge', active ? '' : String(preset.value))}>
+                            <span className="block text-xs font-bold leading-tight">{currencyFormatter.format(preset.value)}</span>
+                            <span className="block text-[9px] font-normal opacity-70">{preset.label}</span>
+                          </PresetButton>
                         );
                       })}
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-slate-500">or</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={current}
+                        onChange={(e) => set('disposableCharge', e.target.value)}
+                        placeholder="Custom"
+                        className={inputClass}
+                      />
+                    </>
+                  );
+                })()}
+              </div>
+            </SectionCard>
+
+            {/* Other / Service Charge */}
+            <SectionCard icon={Wrench} label="Other / Service Charge">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={typeof formState.otherCharge === 'string' ? formState.otherCharge : ''}
+                  onChange={(e) => set('otherCharge', e.target.value)}
+                  placeholder="Amount"
+                  className={inputClass}
+                />
+                <input
+                  type="text"
+                  value={typeof formState.otherChargeReason === 'string' ? formState.otherChargeReason : ''}
+                  onChange={(e) => set('otherChargeReason', capitalizeFirstLetter(e.target.value))}
+                  placeholder="Reason (optional)"
+                  className="input input-xs input-bordered flex-1 min-w-[120px] bg-white text-xs text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100"
+                />
+              </div>
+            </SectionCard>
+
+            {/* Discount */}
+            <SectionCard icon={Tag} label="Discount">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {discountsLoading && <span className="text-xs text-slate-400">Loading...</span>}
+                {discounts.length > 0
+                  ? discounts.map((preset) => {
+                      const v = Number(((gross * Number(preset.value)) / 100).toFixed(2));
+                      const active = Number(v) === Number(discountValue);
+                      return (
+                        <PresetButton key={preset.id ?? preset.value} active={active} onClick={() => set('discount', active ? '' : String(v))}>
+                          <span className="text-xs font-semibold">{preset.label}</span>
+                        </PresetButton>
+                      );
+                    })
+                  : <span className="text-xs text-slate-400">No presets. Enter amount below.</span>
+                }
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formState.discount || ''}
+                  onChange={(e) => set('discount', e.target.value)}
+                  placeholder="Custom"
+                  className={inputClass}
+                />
+              </div>
+            </SectionCard>
+          </div>
+
+          {/* ── RIGHT COLUMN ── */}
+          <div className="space-y-1.5">
+
+            {/* Surgery Charge (conditional) */}
+            {surgeryPresets.length > 0 && (
+              <SectionCard icon={Scissors} label="Surgery Charge">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(() => {
+                    const current = typeof formState.surgeryCharge === 'string' ? formState.surgeryCharge : '';
+                    const numeric = Number.parseFloat(current) || 0;
+                    return (
+                      <>
+                        {surgeryPresets.map((preset) => {
+                          const active = Number(preset.value) === numeric;
+                          return (
+                            <PresetButton key={preset.id ?? preset.value} active={active} onClick={() => set('surgeryCharge', active ? '' : String(preset.value))}>
+                              <span className="block text-xs font-bold leading-tight">{currencyFormatter.format(preset.value)}</span>
+                              <span className="block text-[9px] font-normal opacity-70">{preset.label}</span>
+                            </PresetButton>
+                          );
+                        })}
                         <input
                           type="number"
                           min="0"
                           step="0.01"
                           value={current}
-                          onChange={(e) => handleChangeField('disposableCharge', e.target.value)}
-                          placeholder="Custom amount"
-                          className="input input-sm input-bordered w-36"
+                          onChange={(e) => set('surgeryCharge', e.target.value)}
+                          placeholder="Custom"
+                          className={inputClass}
                         />
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </SectionCard>
+            )}
 
-            {/* Other/Service Charge */}
-            <div className="rounded-lg border border-base-200 bg-base-50 p-4">
-            <label className="mb-2 block text-sm font-semibold text-slate-700">
-              🔧 Other / Service Charge
-            </label>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={typeof formState.otherCharge === 'string' ? formState.otherCharge : ''}
-                onChange={(e) => handleChangeField('otherCharge', e.target.value)}
-                placeholder="Amount"
-                className="input input-sm input-bordered w-32"
-              />
-              <input
-                type="text"
-                value={typeof formState.otherChargeReason === 'string' ? formState.otherChargeReason : ''}
-                onChange={(e) => handleChangeField('otherChargeReason', capitalizeFirstLetter(e.target.value))}
-                placeholder="Reason (optional)"
-                className="input input-sm input-bordered flex-1 min-w-[200px]"
-              />
-            </div>
-            </div>
-
-            {/* Discount (API-driven) */}
-            <div className="rounded-lg border border-base-200 bg-base-50 p-4">
-              <label className="mb-2 block text-sm font-semibold text-slate-700">
-                🎟️ Discount
-              </label>
-              <div className="flex flex-wrap items-center gap-2">
-                {discountsLoading && <span className="text-xs text-slate-400">Loading...</span>}
-                {discounts && discounts.length > 0 ? (
-                  <>
-                    {discounts.map((preset) => {
-                      const gross = doctorChargeValue + surgeryChargeValue + serviceChargeValue + disposableChargeValue + medicinesTotal;
-                      const v = Number(((gross * Number(preset.value)) / 100).toFixed(2));
-                      const active = Number(v) === Number(discountValue);
-                      return (
-                        <button
-                          type="button"
-                          key={preset.id ?? preset.name ?? preset.value}
-                          className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
-                          onClick={() => handleChangeField('discount', String(v))}
-                          title={preset.name ? `Internal: ${preset.name}` : undefined}
-                        >
-                           <span className="ml-1 text-xs opacity-70">{preset.label}</span>
-                        </button>
-                      );
-                    })}
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-slate-500">or</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={formState.discount || ''}
-                        onChange={(e) => handleChangeField('discount', e.target.value)}
-                        placeholder="Custom amount"
-                        className="input input-sm input-bordered w-36"
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-xs text-slate-400">No discount presets found.</span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-slate-500">or</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={formState.discount || ''}
-                        onChange={(e) => handleChangeField('discount', e.target.value)}
-                        placeholder="Custom amount"
-                        className="input input-sm input-bordered w-36"
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
+            {/* Charge breakdown — line by line */}
+            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+              {[
+                { label: 'Doctor', value: doctorChargeValue },
+                { label: 'Surgery', value: surgeryChargeValue },
+                { label: 'Service', value: serviceChargeValue },
+                { label: 'Disposable', value: disposableChargeValue },
+                { label: 'Medicines', value: medicinesTotal },
+              ].map(({ label, value }, i) => (
+                <div key={label} className={`flex items-center justify-between px-3 py-1.5 ${i > 0 ? 'border-t border-slate-100' : ''}`}>
+                  <span className="text-[11px] text-slate-500">{label}</span>
+                  <span className={`text-[11px] font-semibold tabular-nums ${value > 0 ? 'text-slate-800' : 'text-slate-300'}`}>
+                    {currencyFormatter.format(value)}
+                  </span>
+                </div>
+              ))}
               {discountValue > 0 && (
-                <div className="mt-2 text-xs text-emerald-600 font-medium">
-                  ✓ Discount applied: {currencyFormatter.format(discountValue)}
+                <div className="flex items-center justify-between border-t border-emerald-100 bg-emerald-50 px-3 py-1.5">
+                  <span className="text-[11px] font-medium text-emerald-600">Discount</span>
+                  <span className="text-[11px] font-semibold tabular-nums text-emerald-600">− {currencyFormatter.format(discountValue)}</span>
                 </div>
               )}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {/* Surgery Charge */}
-            {Array.isArray(surgeryChargePresets) &&
-              surgeryChargePresets.filter((preset) => preset.active !== false).length > 0 && (
-                <div className="rounded-lg border border-base-200 bg-base-50 p-4">
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    🏥 Surgery Charge
-                  </label>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {(() => {
-                      const current = typeof formState.surgeryCharge === 'string' ? formState.surgeryCharge : '';
-                      const numeric = Number.parseFloat(current) || 0;
-                      const presetsList = surgeryChargePresets.filter((preset) => preset.active !== false);
-
-                      return (
-                        <>
-                          {presetsList.map((preset) => {
-                            const valueNum = Number(preset.value);
-                            const active = Number(valueNum) === Number(numeric);
-                            return (
-                              <button
-                                type="button"
-                                key={preset.id ?? preset.name ?? preset.value}
-                                className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
-                                onClick={() => handleChangeField('surgeryCharge', String(preset.value))}
-                              >
-                                <span className="inline-flex flex-col items-center justify-center min-w-[54px]">
-                                  <span className="text-[15px] font-bold leading-tight text-slate-700">
-                                    {currencyFormatter.format(preset.value)}
-                                  </span>
-                                  <span className="text-[10px] leading-none text-slate-500 font-normal">
-                                    {preset.label}
-                                  </span>
-                                </span>
-                              </button>
-                            );
-                          })}
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-slate-500">or</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={current}
-                              onChange={(e) => handleChangeField('surgeryCharge', e.target.value)}
-                              placeholder="Custom amount"
-                              className="input input-sm input-bordered w-36"
-                            />
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
-              )}
-
-            {/* Summary as small colored boxes */}
-            <div className="flex flex-wrap gap-2 my-2">
-              <div className="px-3 py-2 rounded bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold flex-1 min-w-[120px] flex flex-col items-center">
-                <span className="mb-0.5">Doctor</span>
-                <span className="text-base font-bold">{currencyFormatter.format(doctorChargeValue)}</span>
-              </div>
-              <div className="px-3 py-2 rounded bg-purple-50 border border-purple-200 text-purple-900 text-xs font-semibold flex-1 min-w-[120px] flex flex-col items-center">
-                <span className="mb-0.5">Surgery</span>
-                <span className="text-base font-bold">{currencyFormatter.format(surgeryChargeValue)}</span>
-              </div>
-              <div className="px-3 py-2 rounded bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold flex-1 min-w-[120px] flex flex-col items-center">
-                <span className="mb-0.5">Service</span>
-                <span className="text-base font-bold">{currencyFormatter.format(serviceChargeValue)}</span>
-              </div>
-              <div className="px-3 py-2 rounded bg-yellow-50 border border-yellow-200 text-yellow-900 text-xs font-semibold flex-1 min-w-[120px] flex flex-col items-center">
-                <span className="mb-0.5">Disposable</span>
-                <span className="text-base font-bold">{currencyFormatter.format(disposableChargeValue)}</span>
-              </div>
-              <div className="px-3 py-2 rounded bg-green-50 border border-green-200 text-green-900 text-xs font-semibold flex-1 min-w-[120px] flex flex-col items-center">
-                <span className="mb-0.5">Medicines</span>
-                <span className="text-base font-bold">{currencyFormatter.format(medicinesTotal)}</span>
-              </div>
-              {discountValue > 0 && (
-                <div className="px-3 py-2 rounded bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex-1 min-w-[120px] flex flex-col items-center">
-                  <span className="mb-0.5">Discount</span>
-                  <span className="text-base font-bold">- {currencyFormatter.format(discountValue)}</span>
-                </div>
-              )}
-              <div className="px-3 py-2 rounded bg-primary/10 border border-primary/30 text-primary text-xs font-bold flex-1 min-w-[120px] flex flex-col items-center">
-                <span className="mb-0.5">Total</span>
-                <span className="text-lg font-bold">{currencyFormatter.format(totalChargeEstimate)}</span>
+              <div className="flex items-center justify-between border-t-2 border-blue-300 bg-blue-600 px-3 py-2">
+                <span className="text-xs font-bold text-blue-100">Total</span>
+                <span className="text-sm font-bold tabular-nums text-white">{currencyFormatter.format(totalChargeEstimate)}</span>
               </div>
             </div>
 
-            <div className="rounded-lg border border-base-200 bg-base-50 p-3">
+            {/* Payment */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+              <div className="mb-1 flex items-center gap-2">
+                <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">Payment Method</span>
+              </div>
               <PaymentFooter
                 paymentType={formState.paymentType}
                 paymentStatus={formState.paymentStatus}
                 settledAt={formState.settledAt}
-                onPaymentTypeChange={(value) => handleChangeField('paymentType', value)}
-                onPaymentStatusChange={(value) => handleChangeField('paymentStatus', value)}
-                onSettledAtChange={(value) => handleChangeField('settledAt', value)}
+                onPaymentTypeChange={(value) => set('paymentType', value)}
+                onPaymentStatusChange={(value) => set('paymentStatus', value)}
+                onSettledAtChange={(value) => set('settledAt', value)}
                 paymentStatusOptions={paymentStatusOptions}
               />
             </div>
 
-            {/* Payment Notice */}
+            {/* Credit warning */}
             {formState.paymentType === 'credit' && formState.paymentStatus !== 'paid' && (
-              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 flex items-start gap-2">
-                <span className="text-amber-600 text-lg">⚠️</span>
-                <p className="text-sm text-amber-700 flex-1">
-                  <strong>Credit Payment:</strong> Remember to mark this visit as paid once the balance is settled.
+              <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5">
+                <AlertTriangle size={12} className="mt-0.5 shrink-0 text-amber-500" />
+                <p className="text-xs text-amber-700">
+                  <strong>Credit payment:</strong> Remember to mark this visit as paid once the balance is settled.
                 </p>
               </div>
             )}

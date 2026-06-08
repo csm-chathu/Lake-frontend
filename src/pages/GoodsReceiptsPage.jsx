@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { AlertTriangle, ChevronLeft, ChevronRight, Eye, PackageCheck, Plus, Search, X } from 'lucide-react';
 import { createGoodsReceipt, fetchGoodsReceipts, fetchPurchaseOrders } from '../api/procurement.js';
 import api from '../api/client.js';
 import EntityTable from '../components/EntityTable.jsx';
@@ -93,32 +95,42 @@ const GRNDetailModal = ({ grn, suppliers, onClose }) => {
     []
   );
 
-  return (
-    <dialog open className="modal modal-open">
-      <div className="modal-box w-11/12 max-w-2xl bg-white text-slate-900">
-        <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button>
-        <div className="mb-4">
-          <h3 className="text-lg font-bold text-slate-900">{grn.grnNumber}</h3>
-          <p className="text-xs text-slate-400">
-            Supplier: {supplier?.name ?? '—'}
-            {grn.receivedDate && ` · Received: ${new Date(grn.receivedDate).toLocaleDateString('en-LK')}`}
-          </p>
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 backdrop-blur-sm">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative z-[10000] w-full max-w-5xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-slate-50 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+              <PackageCheck size={18} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">{grn.grnNumber}</h3>
+              <p className="text-xs text-slate-400">
+                Supplier: {supplier?.name ?? '—'}
+                {grn.receivedDate && ` · Received: ${new Date(grn.receivedDate).toLocaleDateString('en-LK')}`}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+            <X size={16} />
+          </button>
         </div>
 
-        <EntityTable
-          columns={columns}
-          data={items.map((item, index) => ({ id: index + 1, ...item }))}
-          loading={false}
-          emptyMessage="No GRN line items."
-          bodyMaxHeightClass="max-h-[320px]"
-          enableSearch={false}
-        />
+        <div className="p-6">
+          <EntityTable
+            columns={columns}
+            data={items.map((item, index) => ({ id: index + 1, ...item }))}
+            loading={false}
+            emptyMessage="No GRN line items."
+            bodyMaxHeightClass="max-h-[320px]"
+            enableSearch={false}
+          />
+        </div>
 
-        
       </div>
-      <div className="modal-backdrop" onClick={onClose} />
-    </dialog>
-  );
+    </div>
+  , document.body);
 };
 
 // ── CreateGRNModal ────────────────────────────────────────────────────────────
@@ -213,9 +225,10 @@ const CreateGRNModal = ({ suppliers, purchaseOrders, medicineVariants, medicineN
   const lineTotal = (li) => (Number(li.quantity) || 0) * (Number(li.unitCost) || 0);
   const grandTotal = form.items.reduce((s, li) => s + lineTotal(li), 0);
 
-  return (
-    <dialog open className="modal modal-open">
-      <div className="modal-box w-[96vw] max-w-7xl bg-white text-slate-900 p-0 overflow-hidden flex flex-col max-h-[92vh]">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 backdrop-blur-sm">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative z-[10000] w-[96vw] max-w-7xl overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl flex max-h-[92vh] flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
@@ -223,7 +236,7 @@ const CreateGRNModal = ({ suppliers, purchaseOrders, medicineVariants, medicineN
             <h3 className="text-lg font-bold text-slate-900">New Goods Receipt (GRN)</h3>
             <p className="text-xs text-slate-400 mt-0.5">Record received stock and update inventory</p>
           </div>
-          <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost">✕</button>
+          <button onClick={onClose} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X size={16} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
@@ -272,8 +285,8 @@ const CreateGRNModal = ({ suppliers, purchaseOrders, medicineVariants, medicineN
                 Items Received
                 <span className="ml-2 badge badge-sm badge-neutral">{form.items.length}</span>
               </span>
-              <button type="button" onClick={addLine} className="btn btn-sm btn-outline btn-primary gap-1">
-                + Add row
+              <button type="button" onClick={addLine} className="inline-flex items-center gap-1.5 btn btn-sm btn-outline btn-primary rounded-xl">
+                <Plus size={14} /> Add row
               </button>
             </div>
 
@@ -513,7 +526,7 @@ const CreateGRNModal = ({ suppliers, purchaseOrders, medicineVariants, medicineN
                             className="btn btn-xs btn-ghost text-error disabled:opacity-30"
                             onClick={() => removeLine(idx)}
                             title="Remove row"
-                          >✕</button>
+                          ><X size={12} /></button>
                       </div>
                     </div>
                   </div>
@@ -541,9 +554,8 @@ const CreateGRNModal = ({ suppliers, purchaseOrders, medicineVariants, medicineN
           </div>
         </form>
       </div>
-      <div className="modal-backdrop" onClick={onClose} />
-    </dialog>
-  );
+    </div>
+  , document.body);
 };
 
 // ── GoodsReceiptsPage ─────────────────────────────────────────────────────────
@@ -610,8 +622,8 @@ const GoodsReceiptsPage = () => {
         header: 'View',
         accessor: 'id',
         render: (grn) => (
-          <button className="btn btn-xs btn-ghost text-primary" onClick={() => setDetailGRN(grn)} aria-label="View goods receipt">
-            👁️
+          <button className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100" onClick={() => setDetailGRN(grn)} aria-label="View goods receipt">
+            <Eye size={13} />
           </button>
         ),
       },
@@ -648,69 +660,89 @@ const GoodsReceiptsPage = () => {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Goods Receipts (GRN)</h1>
-          <p className="text-xs text-slate-400 mt-0.5">Record GRNs, receive stock, and update inventory</p>
+    <section className="space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+          <PackageCheck size={22} />
         </div>
-        <button className="btn btn-sm btn-primary" onClick={() => setShowCreate(true)}>+ New GRN</button>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Goods Receipts (GRN)</h1>
+          <p className="text-sm text-slate-400">Record received stock and link it to purchase orders.</p>
+        </div>
       </div>
 
-      {err && <div className="alert alert-error text-sm">{err}</div>}
-
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
-          className="input input-bordered input-xs w-72"
-          placeholder="Search GRN, supplier, notes..."
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setPage(1);
-          }}
-        />
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="relative min-w-[240px] flex-1">
+            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Search GRN records</span>
+            <Search size={15} className="pointer-events-none absolute left-3 top-[33px] text-slate-400" />
+            <input
+              type="text"
+              className="input input-bordered w-full pl-9 text-sm"
+              placeholder="Search GRN, supplier, notes..."
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(1);
+              }}
+            />
+          </label>
+          <button className="inline-flex items-center gap-2 btn btn-sm btn-primary rounded-xl" onClick={() => setShowCreate(true)}>
+            <Plus size={14} /> New GRN
+          </button>
+        </div>
       </div>
+
+      {err && (
+        <div className="flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <AlertTriangle size={16} className="shrink-0" />
+          {err}
+        </div>
+      )}
 
       <EntityTable
         columns={columns}
         data={grns}
         loading={loading}
+        loadingMessage="Loading goods receipts..."
         emptyMessage="No goods receipts."
         bodyMaxHeightClass="max-h-[560px]"
         enableSearch={false}
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
         <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400 uppercase tracking-wide">Rows per page</span>
           <select
-            className="select select-xs select-bordered"
+            className="select select-sm select-bordered"
             value={perPage}
             onChange={(e) => {
               setPerPage(Number(e.target.value) || 10);
               setPage(1);
             }}
           >
-            {[10, 20, 50].map((size) => <option key={size} value={size}>{size} / page</option>)}
+            {[10, 20, 50].map((size) => <option key={size} value={size}>{size}</option>)}
           </select>
+          <span className="ml-2 text-sm text-slate-500">
+            <span className="font-semibold text-slate-800">{total}</span> records total
+          </span>
         </div>
 
-        <div className="flex items-center gap-2 text-sm text-slate-600">
-          <span>{total} record(s)</span>
+        <div className="flex items-center gap-1">
           <button
-            className="btn btn-xs btn-outline"
+            className="inline-flex items-center gap-1 btn btn-sm btn-ghost rounded-lg px-3"
             disabled={page <= 1 || loading}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
           >
-            Prev
+            <ChevronLeft size={15} /> Prev
           </button>
-          <span>Page {page} / {lastPage}</span>
+          <span className="rounded-lg bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">{page} / {lastPage}</span>
           <button
-            className="btn btn-xs btn-outline"
+            className="inline-flex items-center gap-1 btn btn-sm btn-ghost rounded-lg px-3"
             disabled={page >= lastPage || loading}
             onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
           >
-            Next
+            Next <ChevronRight size={15} />
           </button>
         </div>
       </div>
@@ -732,7 +764,7 @@ const GoodsReceiptsPage = () => {
           onClose={() => setDetailGRN(null)}
         />
       )}
-    </div>
+    </section>
   );
 };
 

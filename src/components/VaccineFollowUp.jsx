@@ -1,4 +1,5 @@
 import React from 'react';
+import { Syringe } from 'lucide-react';
 import { formatDateInput } from '../pages/appointmentsHelpers.js';
 
 export default function VaccineFollowUp({
@@ -9,110 +10,104 @@ export default function VaccineFollowUp({
   firstVaccineMedicineName,
   vaccineNames = []
 }) {
-  if (!hasVaccineMedicine) {
-    return null;
-  }
+  if (!hasVaccineMedicine) return null;
+
+  const baseString = vaccinationPlan.administeredAt || formatDateInput(formState.date) || formatDateInput(new Date());
+  const baseDate = baseString ? new Date(baseString) : new Date();
+
+  const defaultTwoWeeks = (() => {
+    if (Number.isNaN(baseDate.valueOf())) return '';
+    const copy = new Date(baseDate);
+    copy.setDate(copy.getDate() + 14);
+    return formatDateInput(copy.toISOString());
+  })();
+
+  const currentNextDue = formatDateInput(vaccinationPlan.nextDueAt) || defaultTwoWeeks;
+
+  const PRESETS = [
+    { label: '3 days',   type: 'days',   amount: 3 },
+    { label: '2 weeks',  type: 'days',   amount: 14 },
+    { label: '1 month',  type: 'months', amount: 1 },
+    { label: '3 months', type: 'months', amount: 3 },
+    { label: '6 months', type: 'months', amount: 6 },
+    { label: '1 year',   type: 'years',  amount: 1 }
+  ];
 
   return (
-    <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold text-emerald-900">Vaccine follow-up</p>
-          <p className="text-xs text-emerald-800">Set the next vaccine date now so it is saved with this visit.</p>
+    <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-emerald-100 bg-emerald-50 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Syringe size={15} className="text-emerald-600" />
+          <h3 className="text-sm font-semibold text-emerald-900">Vaccine Follow-up</h3>
         </div>
-        <span className="text-[11px] uppercase tracking-wide text-emerald-700">Vaccine detected</span>
+        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+          Vaccine detected
+        </span>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="form-control w-full">
-          <span className="label-text text-xs font-semibold uppercase tracking-wide text-emerald-900">Vaccine name</span>
+
+      <div className="grid gap-4 p-4 sm:grid-cols-2">
+        {/* Vaccine name */}
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Vaccine name</label>
           <input
             type="text"
-            className="input input-sm input-bordered bg-white"
+            className="input input-sm input-bordered w-full bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
             value={vaccinationPlan.vaccineName || ''}
-            onChange={(event) =>
-              updateVaccinationPlan((plan) => ({ ...plan, vaccineName: event.target.value, enabled: true }))
+            onChange={(e) =>
+              updateVaccinationPlan((plan) => ({ ...plan, vaccineName: e.target.value, enabled: true }))
             }
             placeholder={firstVaccineMedicineName || 'Rabies, DHP, etc.'}
             list="vaccine-name-options"
             autoComplete="on"
           />
           <datalist id="vaccine-name-options">
-            {vaccineNames.map((name) => (
-              <option key={name} value={name} />
-            ))}
+            {vaccineNames.map((name) => <option key={name} value={name} />)}
           </datalist>
-        </label>
-        <label className="form-control w-full">
-          <span className="label-text text-xs font-semibold uppercase tracking-wide text-emerald-900">Next vaccine date</span>
+        </div>
+
+        {/* Next vaccine date */}
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Next vaccine date</label>
           <input
             type="date"
-            className="input input-sm input-bordered bg-white"
+            className="input input-sm input-bordered w-full bg-white text-sm text-slate-800 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
             value={formatDateInput(vaccinationPlan.nextDueAt)}
-            onChange={(event) =>
-              updateVaccinationPlan((plan) => ({ ...plan, nextDueAt: formatDateInput(event.target.value), enabled: true }))
+            onChange={(e) =>
+              updateVaccinationPlan((plan) => ({ ...plan, nextDueAt: formatDateInput(e.target.value), enabled: true }))
             }
           />
-          {(() => {
-            const baseString = vaccinationPlan.administeredAt || formatDateInput(formState.date) || formatDateInput(new Date());
-            const baseDate = baseString ? new Date(baseString) : new Date();
-            const defaultTwoWeeks = (() => {
-              if (Number.isNaN(baseDate.valueOf())) return '';
-              const copy = new Date(baseDate);
-              copy.setDate(copy.getDate() + 14);
-              return formatDateInput(copy.toISOString());
-            })();
-            const currentNextDue = formatDateInput(vaccinationPlan.nextDueAt) || defaultTwoWeeks;
-
-            return (
-              <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-emerald-800">
-                {[{
-                  label: '3 days', type: 'days', amount: 3
-                }, {
-                  label: '2 weeks', type: 'days', amount: 14
-                }, {
-                  label: '1 month', type: 'months', amount: 1
-                }, {
-                  label: '3 months', type: 'months', amount: 3
-                }, {
-                  label: '6 months', type: 'months', amount: 6
-                }, {
-                  label: '1 year', type: 'years', amount: 1
-                }].map((preset) => {
-                  const workingBase = baseDate && !Number.isNaN(baseDate.valueOf()) ? new Date(baseDate) : new Date();
-                  let target = '';
-                  if (!Number.isNaN(workingBase.valueOf())) {
-                    if (preset.type === 'days') {
-                      workingBase.setDate(workingBase.getDate() + preset.amount);
-                    } else if (preset.type === 'months') {
-                      workingBase.setMonth(workingBase.getMonth() + preset.amount);
-                    } else if (preset.type === 'years') {
-                      workingBase.setFullYear(workingBase.getFullYear() + preset.amount);
-                    }
-                    target = formatDateInput(workingBase.toISOString());
-                  }
-                  const isActive = target && target === currentNextDue;
-                  return (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      className={`badge badge-lg border px-3 py-2 ${
-                        isActive
-                          ? 'bg-emerald-200 text-emerald-900 border-emerald-300'
-                          : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                      }`}
-                      onClick={() => {
-                        if (!target) return;
-                        updateVaccinationPlan((plan) => ({ ...plan, nextDueAt: target, enabled: true }));
-                      }}
-                    >
-                      {preset.label}
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })()}
-        </label>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {PRESETS.map((preset) => {
+              const working = baseDate && !Number.isNaN(baseDate.valueOf()) ? new Date(baseDate) : new Date();
+              let target = '';
+              if (!Number.isNaN(working.valueOf())) {
+                if (preset.type === 'days') working.setDate(working.getDate() + preset.amount);
+                else if (preset.type === 'months') working.setMonth(working.getMonth() + preset.amount);
+                else if (preset.type === 'years') working.setFullYear(working.getFullYear() + preset.amount);
+                target = formatDateInput(working.toISOString());
+              }
+              const isActive = target && target === currentNextDue;
+              return (
+                <button
+                  key={preset.label}
+                  type="button"
+                  className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition ${
+                    isActive
+                      ? 'border-emerald-400 bg-emerald-100 text-emerald-800'
+                      : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700'
+                  }`}
+                  onClick={() => {
+                    if (!target) return;
+                    updateVaccinationPlan((plan) => ({ ...plan, nextDueAt: target, enabled: true }));
+                  }}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );

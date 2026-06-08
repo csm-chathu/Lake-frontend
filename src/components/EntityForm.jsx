@@ -14,24 +14,28 @@ const EntityForm = ({
   showSubmit = true,
   submitLoading = false,
   preventSubmitOnEnter = false,
-  className
+  className,
+  noCard = false,
 }) => {
   const formClassName = className || "grid gap-4 md:grid-cols-3";
   const colMatch = formClassName.match(/md:grid-cols-(\d+)/);
   const gridCols = colMatch ? parseInt(colMatch[1], 10) : 3;
   const fullWidthColSpanClass = `md:col-span-${gridCols}`;
 
+  const sectionClass = noCard ? '' : 'rounded-2xl border border-slate-200 bg-white p-6 shadow-sm';
 
   return (
-  <section className="rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm">
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-      <h2 className="text-xl font-semibold text-slate-800">{title}</h2>
-      {isEditing && onCancel && (
-        <button type="button" className="btn btn-sm btn-ghost" onClick={onCancel}>
-          Cancel edit
-        </button>
-      )}
-    </div>
+  <section className={sectionClass}>
+    {!noCard && (title || (isEditing && onCancel)) && (
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        {title && <h2 className="text-xl font-semibold text-slate-800">{title}</h2>}
+        {isEditing && onCancel && (
+          <button type="button" className="btn btn-sm btn-ghost" onClick={onCancel}>
+            Cancel edit
+          </button>
+        )}
+      </div>
+    )}
     <form
       className={formClassName}
       onSubmit={onSubmit}
@@ -172,7 +176,7 @@ const EntityForm = ({
         {showSubmit ? (
         <button
             type="submit"
-            className="btn btn-primary px-6 gap-2"
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-7 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
             disabled={submitLoading}
         >
             {submitLoading ? (

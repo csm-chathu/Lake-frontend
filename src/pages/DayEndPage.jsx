@@ -78,7 +78,16 @@ const DayEndPage = () => {
       {err && <div className="alert alert-error text-sm">{err}</div>}
 
       {/* Summary cards */}
-      {loading && <div className="text-slate-400 text-sm py-6 text-center">Loading summary…</div>}
+      {loading && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-pulse">
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-2">
+              <div className="h-3 w-24 rounded-full bg-slate-100" />
+              <div className="h-6 w-16 rounded-lg bg-slate-100" />
+            </div>
+          ))}
+        </div>
+      )}
 
       {!loading && s && (
         <>

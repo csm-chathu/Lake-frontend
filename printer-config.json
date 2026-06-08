@@ -1,12 +1,22 @@
 {
+  "app": {
+    "url": "http://127.0.0.1:8000",
+    "name": "VetFinal",
+    "icon": ""
+  },
   "barcode": {
-    "name": "4BARCODE 3B-365B",
+    "name": "4BARCODE 2B-2023B-barcode",
     "width": 30000,
     "height": 20000
   },
   "pos": {
     "name": "4BARCODE 3B-365B",
     "width": 80000,
-    "height": 120000
+    "height": 304800
+  },
+  "a5": {
+    "name": "",
+    "width": 148000,
+    "height": 210000
   }
 }

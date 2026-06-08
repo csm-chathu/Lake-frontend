@@ -1,3 +1,26 @@
+import { Banknote, CreditCard } from 'lucide-react';
+
+const OPTIONS = [
+  {
+    key: 'cash',
+    label: 'Cash',
+    helper: 'Paid at counter',
+    Icon: Banknote,
+    activeClass: 'border-emerald-300 bg-emerald-50 text-emerald-900',
+    activeIcon: 'text-emerald-600',
+    badge: 'bg-emerald-100 text-emerald-700'
+  },
+  {
+    key: 'credit',
+    label: 'Credit',
+    helper: 'Balance due later',
+    Icon: CreditCard,
+    activeClass: 'border-violet-300 bg-violet-50 text-violet-900',
+    activeIcon: 'text-violet-600',
+    badge: 'bg-violet-100 text-violet-700'
+  }
+];
+
 const PaymentFooter = ({
   paymentType,
   paymentStatus,
@@ -7,60 +30,59 @@ const PaymentFooter = ({
   onSettledAtChange,
   paymentStatusOptions
 }) => (
-  <div className="flex flex-wrap items-center gap-3">
-    <div className="text-sm font-medium text-slate-600 hidden">Payment</div>
-    <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Payment type">
-      {[{
-        key: 'cash',
-        label: 'Cash',
-        icon: '💵',
-        helper: 'Paid at counter'
-      }, {
-        key: 'credit',
-        label: 'Credit',
-        icon: '💳',
-        helper: 'Balance due later'
-      }].map((option) => {
+  <div className="space-y-2">
+    <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Payment type">
+      {OPTIONS.map((option) => {
         const active = paymentType === option.key;
         return (
           <button
             key={option.key}
             type="button"
-            className={`flex min-w-[140px] items-start gap-3 rounded-lg border px-3 py-2 text-left shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${active ? 'border-emerald-500 bg-emerald-50 text-emerald-900' : 'border-slate-200 bg-white hover:border-emerald-200'}`}
-            onClick={() => onPaymentTypeChange(option.key)}
             role="radio"
             aria-checked={active}
+            className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition ${
+              active ? option.activeClass : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+            }`}
+            onClick={() => onPaymentTypeChange(option.key)}
           >
-            <span className="text-lg" aria-hidden>{option.icon}</span>
-            <div className="flex-1">
-              <p className="text-sm font-semibold">{option.label}</p>
-              <p className="text-[11px] text-slate-500">{option.helper}</p>
+            <option.Icon
+              size={13}
+              className={active ? option.activeIcon : 'text-slate-400'}
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold leading-tight">{option.label}</p>
             </div>
-            {active ? <span className="text-[11px] font-semibold text-emerald-700">Selected</span> : null}
+            {active && (
+              <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${option.badge}`}>✓</span>
+            )}
           </button>
         );
       })}
     </div>
+
     {paymentType === 'credit' && (
       <div className="flex flex-wrap items-center gap-2">
-        <select
-          className="select select-sm select-bordered w-36"
-          value={paymentStatus}
-          onChange={(event) => onPaymentStatusChange(event.target.value)}
-        >
-          {paymentStatusOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
+        <div className="flex flex-col gap-0.5">
+          <label className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">Status</label>
+          <select
+            className="select select-xs select-bordered bg-white text-xs text-slate-800 focus:border-blue-400"
+            value={paymentStatus}
+            onChange={(event) => onPaymentStatusChange(event.target.value)}
+          >
+            {paymentStatusOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
 
         {paymentStatus === 'paid' && (
-          <div className="ml-2 flex items-center gap-2">
-            <label className="text-sm font-medium text-slate-600">Settled on</label>
+          <div className="flex flex-col gap-0.5">
+            <label className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">Settled on</label>
             <input
               type="datetime-local"
               value={settledAt || ''}
               onChange={(event) => onSettledAtChange(event.target.value)}
-              className="input input-sm input-bordered"
+              className="input input-xs input-bordered bg-white text-xs text-slate-800 focus:border-blue-400 focus:outline-none"
             />
           </div>
         )}

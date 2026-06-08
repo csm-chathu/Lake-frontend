@@ -5,6 +5,7 @@ const capitalizeFirstLetter = (value) => {
 };
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
+import { Eye, Printer, RefreshCw } from 'lucide-react';
 import { useClinicSettings } from '../context/ClinicSettingsContext.jsx';
 
 const DEFAULT_BREEDS = ['Mixed breed', 'Unknown', 'Other'];
@@ -555,7 +556,7 @@ const QuickPatientRegistrationCard = ({
     setOwnerSearch(ownerLabel(owner));
   }, [ownerLabel]);
 
-  const handlePrintPassbookBarcode = useCallback(() => {
+  const handlePrintPassbookBarcode = useCallback(async () => {
     const passbookValue = String(passbookPreview || '').trim();
     const clinicName = String(settings?.name || 'Clinic').trim();
     if (!passbookValue) {
@@ -576,76 +577,48 @@ const QuickPatientRegistrationCard = ({
       const barcodeSvg = tempSvg.outerHTML;
       const safeClinicName = escapeHtml(clinicName || 'Clinic');
       const safePassbook = escapeHtml(passbookValue);
-      const printWindow = window.open('', '_blank', 'width=420,height=620');
 
+      const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Passbook Barcode</title>
+    <style>
+      @page { size: auto; margin: 10mm; }
+      body { margin: 0; font-family: Arial, sans-serif; display: flex; min-height: 100vh; align-items: center; justify-content: center; background: #ffffff; }
+      .label { border: 1px solid #d1d5db; border-radius: 8px; padding: 16px; text-align: center; width: 320px; }
+      .title { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+      .subtitle { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+      .barcode { display: flex; justify-content: center; margin-bottom: 8px; }
+      .code { font-family: monospace; font-size: 16px; letter-spacing: 0.08em; }
+    </style>
+  </head>
+  <body>
+    <div class="label">
+      <div class="title">${safeClinicName}</div>
+      <div class="subtitle">Passbook Barcode</div>
+      <div class="barcode">${barcodeSvg}</div>
+      <div class="code">${safePassbook}</div>
+    </div>
+  </body>
+</html>`;
+
+      if (window.electronAPI?.printBarcode) {
+        const config = await window.electronAPI.getPrinterConfig().catch(() => ({}));
+        const printerName = config?.barcode?.name || '';
+        console.log('[printBarcode] printer:', printerName || '(default)');
+        const result = await window.electronAPI.printBarcode(html, printerName);
+        console.log('[printBarcode] result:', result);
+        return;
+      }
+
+      const printWindow = window.open('', '_blank', 'width=420,height=620');
       if (!printWindow) {
         setError('Unable to open print window. Please allow popups and try again.');
         return;
       }
-
       printWindow.document.open();
-      printWindow.document.write(`
-        <!doctype html>
-        <html>
-          <head>
-            <meta charset="utf-8" />
-            <title>Passbook Barcode</title>
-            <style>
-              @page { size: auto; margin: 10mm; }
-              body {
-                margin: 0;
-                font-family: Arial, sans-serif;
-                display: flex;
-                min-height: 100vh;
-                align-items: center;
-                justify-content: center;
-                background: #ffffff;
-              }
-              .label {
-                border: 1px solid #d1d5db;
-                border-radius: 8px;
-                padding: 16px;
-                text-align: center;
-                width: 320px;
-              }
-              .title {
-                font-size: 15px;
-                font-weight: 700;
-                margin-bottom: 2px;
-              }
-              .subtitle {
-                font-size: 14px;
-                font-weight: 600;
-                margin-bottom: 10px;
-              }
-              .barcode {
-                display: flex;
-                justify-content: center;
-                margin-bottom: 8px;
-              }
-              .code {
-                font-family: monospace;
-                font-size: 16px;
-                letter-spacing: 0.08em;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="label">
-              <div class="title">${safeClinicName}</div>
-              <div class="subtitle">Passbook Barcode</div>
-              <div class="barcode">${barcodeSvg}</div>
-              <div class="code">${safePassbook}</div>
-            </div>
-            <script>
-              setTimeout(function () {
-                window.print();
-                setTimeout(function () { window.close(); }, 100);
-              }, 120);
-            </script>
-          </body>
-        </html>
-      `);
+      printWindow.document.write(html.replace('</body>', `<script>setTimeout(function(){window.print();setTimeout(function(){window.close();},100);},120);<\/script></body>`));
       printWindow.document.close();
     } catch (printError) {
       setError(printError?.message || 'Failed to generate barcode for printing.');
@@ -654,282 +627,266 @@ const QuickPatientRegistrationCard = ({
 
 
 
+  const isOther = form.species !== 'Canine' && form.species !== 'Feline';
+  const inputSm = 'input input-sm input-bordered w-full bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100';
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5">
       {error && (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
           {error}
         </div>
       )}
       {success && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
           {success}
         </div>
       )}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-12 items-end">
-        <label className="form-control w-full md:col-span-2">
-          <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Patient name <span className="text-red-600">*</span>
-          </span>
+
+      {/* ── Row 1: Patient identity ── */}
+      <div className="flex flex-wrap items-end gap-2">
+
+        {/* Patient name */}
+        <div className="flex flex-col gap-1 min-w-[120px] flex-1">
+          <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            Patient name <span className="text-rose-400">*</span>
+          </label>
           <input
             type="text"
-            className="input input-sm input-bordered w-full bg-white"
+            className={inputSm}
             value={form.patientName}
-            onChange={(event) => {
-              handleInputChange('patientName', capitalizeFirstLetter(event.target.value));
-            }}
+            onChange={(e) => handleInputChange('patientName', capitalizeFirstLetter(e.target.value))}
             placeholder="Name"
-            style={{ minWidth: 0 }}
           />
-        </label>
-        <label className="form-control w-full md:col-span-3">
-          <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Species
-          </span>
-          <div className="flex flex-row flex-wrap items-center gap-3 mt-1">
-            {['Canine', 'Feline'].map((mainSpecies) => (
-              <label key={mainSpecies} className="inline-flex items-center mr-1 text-xs">
-                <input
-                  type="radio"
-                  name="species"
-                  className="radio radio-xs"
-                  value={mainSpecies}
-                  checked={form.species === mainSpecies}
-                  onChange={() => handleInputChange('species', mainSpecies)}
-                  style={{ width: 14, height: 14 }}
-                />
-                <span className="ml-0.5">{mainSpecies}</span>
-              </label>
-            ))}
-            <label className="inline-flex items-center text-xs">
-              <input
-                type="radio"
-                name="species"
-                className="radio radio-xs"
-                value="other"
-                checked={form.species !== 'Canine' && form.species !== 'Feline' && form.species !== ''}
-                onChange={() => handleInputChange('species', '')}
-                style={{ width: 14, height: 14 }}
-              />
-              <span className="ml-0.5">Other</span>
+        </div>
+
+        {/* Species — pill toggle */}
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Species</label>
+          <div className="flex items-center gap-1">
+            <div className="flex overflow-hidden rounded-lg border border-slate-200">
+              {['Canine', 'Feline', 'Other'].map((s, i) => {
+                const active = s === 'Other' ? isOther : form.species === s;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => handleInputChange('species', s === 'Other' ? '' : s)}
+                    className={`px-2.5 py-1.5 text-xs font-semibold transition ${i < 2 ? 'border-r border-slate-200' : ''} ${
+                      active ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+            {isOther && (
               <input
                 type="text"
-                className="input input-2xs input-bordered bg-white ml-1 py-0 px-1"
-                value={form.species !== 'Canine' && form.species !== 'Feline' ? form.species : ''}
-                onChange={(event) => handleInputChange('species', capitalizeFirstLetter(event.target.value))}
-                placeholder="Enter species"
-                disabled={form.species === 'Canine' || form.species === 'Feline'}
-                style={{ width: 70, fontSize: '11px', height: 22 }}
+                className="input input-sm input-bordered w-24 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                value={form.species}
+                onChange={(e) => handleInputChange('species', capitalizeFirstLetter(e.target.value))}
+                placeholder="Species…"
+                autoFocus
               />
-            </label>
+            )}
           </div>
-        </label>
-        <label className="form-control w-full md:col-span-2">
-          <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Breed
-          </span>
+        </div>
+
+        {/* Breed */}
+        <div className="flex flex-col gap-1 w-28">
+          <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Breed</label>
           <input
             type="text"
             list={BREED_DATALIST_ID}
-            className="input input-sm input-bordered w-full bg-white"
+            className={inputSm}
             value={form.breed}
-            onChange={(event) => handleInputChange('breed', capitalizeFirstLetter(event.target.value))}
+            onChange={(e) => handleInputChange('breed', capitalizeFirstLetter(e.target.value))}
             placeholder="Breed"
-            style={{ minWidth: 0 }}
           />
           <datalist id={BREED_DATALIST_ID}>
-            {DEFAULT_BREEDS.map((opt) => (
-              <option key={opt} value={opt} />
-            ))}
+            {DEFAULT_BREEDS.map((opt) => <option key={opt} value={opt} />)}
           </datalist>
-        </label>
-        <div className="form-control w-full md:col-span-1">
-          <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Gender
-          </span>
-          <div className="flex items-center gap-1 mt-1">
-            {['male', 'female'].map((opt) => (
-              <label key={opt} className="inline-flex items-center">
-                <input
-                  type="radio"
-                  name="gender"
-                  className="radio radio-sm"
-                  value={opt}
-                  checked={form.gender === opt}
-                  onChange={(e) => handleInputChange('gender', e.target.value)}
-                />
-                <span className="ml-0.5 capitalize">{opt.slice(0, 1).toUpperCase()}</span>
-              </label>
+        </div>
+
+        {/* Gender — M / F pill toggle */}
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Sex</label>
+          <div className="flex overflow-hidden rounded-lg border border-slate-200">
+            {[['male','M'],['female','F']].map(([val, lbl], i) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => handleInputChange('gender', val)}
+                className={`px-3 py-1.5 text-xs font-bold transition ${i === 0 ? 'border-r border-slate-200' : ''} ${
+                  form.gender === val ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {lbl}
+              </button>
             ))}
           </div>
         </div>
-        <div className="flex flex-row gap-2 md:col-span-4 items-end">
-          <label className="form-control w-full max-w-[100px]">
-            <span className="label-text text-[10px] font-semibold uppercase tracking-wide text-slate-500">Age (y)</span>
-            <input
-              type="number"
-              min="0"
-              className="input input-sm input-bordered w-full bg-white"
-              value={form.ageYears}
-              onChange={(event) => handleInputChange('ageYears', event.target.value)}
-              placeholder="0"
-              max="30"
-              style={{ minWidth: 0, maxWidth: 80 }}
-            />
-          </label>
-          <label className="form-control w-full max-w-[100px]">
-            <span className="label-text text-[10px] font-semibold uppercase tracking-wide text-slate-500">(m)</span>
-            <input
-              type="number"
-              min="0"
-              max="12"
-              className="input input-sm input-bordered w-full bg-white"
-              value={form.ageMonths}
-              onChange={(event) => handleInputChange('ageMonths', event.target.value)}
-              placeholder="0"
-              style={{ minWidth: 0, maxWidth: 80 }}
-            />
-          </label>
-          <label className="form-control w-full max-w-[120px]">
-            <span className="label-text text-[10px] font-semibold uppercase tracking-wide text-slate-500">Wt (kg)</span>
-            <input
-              type="number"
-              min="0"
-              step="0.1"
-              className="input input-sm input-bordered w-full bg-white"
-              value={form.weight}
-              onChange={(event) => handleInputChange('weight', event.target.value)}
-              placeholder="0.0"
-              style={{ minWidth: 0, maxWidth: 100 }}
-            />
-          </label>
+
+        {/* Age Y */}
+        <div className="flex flex-col gap-1 w-20">
+          <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Yr</label>
+          <input
+            type="number" min="0" max="30"
+            className="input input-sm input-bordered w-full bg-white text-center text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            value={form.ageYears}
+            onChange={(e) => handleInputChange('ageYears', e.target.value)}
+            placeholder="0"
+          />
+        </div>
+
+        {/* Age M */}
+        <div className="flex flex-col gap-1 w-20">
+          <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Mo</label>
+          <input
+            type="number" min="0" max="12"
+            className="input input-sm input-bordered w-full bg-white text-center text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            value={form.ageMonths}
+            onChange={(e) => handleInputChange('ageMonths', e.target.value)}
+            placeholder="0"
+          />
+        </div>
+
+        {/* Weight */}
+        <div className="flex flex-col gap-1 w-24">
+          <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Kg</label>
+          <input
+            type="number" min="0" step="0.1"
+            className="input input-sm input-bordered w-full bg-white text-center text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            value={form.weight}
+            onChange={(e) => handleInputChange('weight', e.target.value)}
+            placeholder="0.0"
+          />
         </div>
       </div>
-      <div className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50/80 p-4">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-12 items-end">
-          <div className="md:col-span-4">
-            <div className="relative">
-            <label className="form-control w-full">
-              <div className="flex items-center justify-between mb-1">
-                <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-600">Owner name<span className="text-red-500 ml-1">*</span></span>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="checkbox checkbox-xs checkbox-warning"
-                    checked={form.isWalkingPatient}
-                    onChange={(e) => handleInputChange('isWalkingPatient', e.target.checked)}
-                  />
-                  <span className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide">Walk-in</span>
-                </label>
-              </div>
-              <input
-                type="text"
-                value={ownerSearch}
-                onChange={(e)=>{
-                  if (!form.isWalkingPatient) {
-                    const capitalized = capitalizeFirstLetter(e.target.value);
-                    setOwnerSearch(capitalized);
-                    setForm(prev=>({...prev,existingOwnerId:"", ownerFirstName: capitalized}));
-                  }
-                }}
-                placeholder="Search or type owner name"
-                className={`input input-sm input-bordered w-full ${form.existingOwnerId || form.isWalkingPatient ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
-                readOnly={!!form.existingOwnerId || form.isWalkingPatient}
-              />
-            </label>
 
-            {ownerSearch && filteredOwners.length > 0 && !form.existingOwnerId && !form.isWalkingPatient && (
-              <ul className="menu rounded-box border border-slate-200 bg-white shadow-md absolute left-0 right-0 mt-1 z-10">
-                {filteredOwners.map((owner)=>(<li key={owner.id}><button type="button" className="w-full text-left px-4 py-2 hover:bg-slate-100" onClick={()=>handleOwnerSelect(owner)}>{ownerLabel(owner)}</button></li>))}
-              </ul>
-            )}
-          </div>
-          </div>
+      {/* ── Row 2: Owner + Passbook — single inline bar ── */}
+      <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5">
 
-          <div className="md:col-span-3">
-            {form.existingOwnerId && (
-              <div className="flex items-center">
-                <button
-                  type="button"
-                  className="btn btn-sm btn-secondary flex items-center"
-                  onClick={()=>{setForm(prev=>({...prev,existingOwnerId:""})); setOwnerSearch("");}}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-7-7l7 7m0 0h-4m4 0v-4" />
-                  </svg>
-                  Change
-                </button>
-              </div>
-            )}
-            {!form.existingOwnerId && (
-              <label className="form-control w-full">
-                <span className="label-text text-xs font-semibold uppercase tracking-wide text-slate-600">Owner phone (optional)</span>
-                <input type="tel" className="input input-sm input-bordered bg-white w-full" value={form.ownerPhone} onChange={(event)=>handleInputChange("ownerPhone", event.target.value)} placeholder="0712345678"/>
-              </label>
-            )}
-          </div>
+        {/* Owner label + walk-in toggle */}
+        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+          Owner <span className="text-rose-400">*</span>
+        </span>
+        <label className="flex shrink-0 cursor-pointer items-center gap-1">
+          <input
+            type="checkbox"
+            className="h-3 w-3 rounded border-amber-400 accent-amber-500"
+            checked={form.isWalkingPatient}
+            onChange={(e) => handleInputChange('isWalkingPatient', e.target.checked)}
+          />
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Walk-in</span>
+        </label>
 
-          <div className="flex w-full items-center justify-start gap-2 font-semibold text-sky-900 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs whitespace-nowrap md:col-span-5 md:ml-auto">
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white text-sky-700 shadow-sm">PB</span>
-            <span className="text-left">{passbookPreview && initialValues?.passbookNumber ? 'Passbook' : 'Next passbook'}</span>
-            <div className="font-mono text-sm text-slate-800 text-left">
-              {passbookLoading ? (
-                <span className="text-slate-500">Fetching…</span>
-              ) : passbookPreview ? (
-                <span className="rounded-md bg-white px-2 py-1 shadow-sm">{passbookPreview}</span>
-              ) : (
-                <span className="text-slate-500">Not available</span>
-              )}
-            </div>
+        {/* Owner search input */}
+        <div className="relative min-w-[140px] flex-1">
+          <input
+            type="text"
+            value={ownerSearch}
+            onChange={(e) => {
+              if (!form.isWalkingPatient) {
+                const capitalized = capitalizeFirstLetter(e.target.value);
+                setOwnerSearch(capitalized);
+                setForm((prev) => ({ ...prev, existingOwnerId: '', ownerFirstName: capitalized }));
+              }
+            }}
+            placeholder="Search or type owner name"
+            className={`input input-xs input-bordered w-full text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100 ${
+              form.existingOwnerId || form.isWalkingPatient ? 'cursor-not-allowed bg-slate-100' : 'bg-white'
+            }`}
+            readOnly={!!form.existingOwnerId || form.isWalkingPatient}
+          />
+          {ownerSearch && filteredOwners.length > 0 && !form.existingOwnerId && !form.isWalkingPatient && (
+            <ul className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+              {filteredOwners.slice(0, 6).map((owner) => (
+                <li key={owner.id}>
+                  <button
+                    type="button"
+                    className="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-blue-50"
+                    onClick={() => handleOwnerSelect(owner)}
+                  >
+                    {ownerLabel(owner)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Change owner */}
+        {form.existingOwnerId && (
+          <button
+            type="button"
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+            onClick={() => { setForm((prev) => ({ ...prev, existingOwnerId: '' })); setOwnerSearch(''); }}
+          >
+            <RefreshCw size={10} /> Change
+          </button>
+        )}
+
+        {/* Phone — inline, no label row */}
+        {!form.existingOwnerId && !form.isWalkingPatient && (
+          <input
+            type="tel"
+            className="input input-xs input-bordered w-28 shrink-0 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100"
+            value={form.ownerPhone}
+            onChange={(e) => handleInputChange('ownerPhone', e.target.value)}
+            placeholder="Phone (opt)"
+          />
+        )}
+
+        {/* Passbook + Print + View */}
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-sky-600 whitespace-nowrap">
+            {initialValues?.passbookNumber ? 'PB' : 'Next PB'}
+          </span>
+          <span className="font-mono text-xs font-bold text-slate-800">
+            {passbookLoading ? '…' : passbookPreview || '—'}
+          </span>
+          <button
+            type="button"
+            data-print-passbook
+            className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-40"
+            onClick={handlePrintPassbookBarcode}
+            disabled={!passbookPreview}
+            title="Print passbook barcode (F4)"
+          >
+            <Printer size={10} /> Print
+          </button>
+          {onViewPatientInfo && initialValues && (
             <button
               type="button"
-              className="btn btn-xs bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700 hover:border-emerald-700 disabled:bg-slate-300 disabled:border-slate-300 disabled:text-slate-500"
-              onClick={handlePrintPassbookBarcode}
-              disabled={!passbookPreview}
-              title={passbookPreview ? 'Print passbook barcode' : 'Passbook number not available'}
+              className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2 py-1 text-[10px] font-semibold text-white transition hover:bg-blue-700"
+              onClick={onViewPatientInfo}
+              title="View patient profile"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 mr-1" aria-hidden="true">
-                <rect x="3" y="4" width="2" height="6" />
-                <rect x="7" y="4" width="1" height="6" />
-                <rect x="10" y="4" width="2" height="6" />
-                <rect x="14" y="4" width="1" height="6" />
-                <rect x="17" y="4" width="2" height="6" />
-                <rect x="3" y="14" width="2" height="6" />
-                <rect x="7" y="14" width="1" height="6" />
-                <rect x="10" y="14" width="2" height="6" />
-                <rect x="14" y="14" width="1" height="6" />
-                <rect x="17" y="14" width="2" height="6" />
-              </svg>
-              Print
+              <Eye size={10} /> Info
             </button>
-            {onViewPatientInfo && initialValues && (
-              <button
-                type="button"
-                className="btn btn-sm btn-outline btn-secondary flex items-center gap-1"
-                onClick={onViewPatientInfo}
-              >
-                <span className="text-lg">👁️</span>
-                <span className="font-semibold">View patient info</span>
-              </button>
-            )}
-          </div>
+          )}
         </div>
       </div>
+
+      {/* Actions — only when not embedded in parent form */}
       {(!hideActions || canUpdateExisting) && (
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2 pt-1">
           {!hideActions && (
             <>
               <button
                 type="button"
-                className="btn btn-sm btn-primary"
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
                 onClick={handleSubmit}
                 disabled={saving}
               >
-                {saving ? 'Saving…' : 'Save & select'}
+                {saving ? 'Saving…' : 'Save & Select'}
               </button>
               <button
                 type="button"
-                className="btn btn-sm btn-ghost"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                 onClick={handleReset}
                 disabled={saving}
               >

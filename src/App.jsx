@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout.jsx';
 import AppointmentsPage from './pages/AppointmentsPage.jsx';
 import AppointmentsHistoryPage from './pages/AppointmentsHistoryPage.jsx';
+import AppointmentReceiptPage from './pages/AppointmentReceiptPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import PatientsPage from './pages/PatientsPage.jsx';
@@ -12,9 +13,12 @@ import MedicinesPage from './pages/MedicinesPage.jsx';
 import SuppliersPage from './pages/SuppliersPage.jsx';
 import StockPage from './pages/StockPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
+import AppSettingsPage from './pages/AppSettingsPage.jsx';
+import GettingStartedPage from './pages/GettingStartedPage.jsx';
 import SmsLogsPage from './pages/SmsLogsPage.jsx';
 import DirectSalesPage from './pages/DirectSalesPage.jsx';
 import DirectSalesHistoryPage from './pages/DirectSalesHistoryPage.jsx';
+import DirectSaleReceiptPage from './pages/DirectSaleReceiptPage.jsx';
 import ReportsPage from './pages/ReportsPage.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import DayEndPage from './pages/DayEndPage.jsx';
@@ -46,13 +50,17 @@ const App = () => (
         <Route path="/salaries" element={<Navigate to="/employees?tab=salaries" replace />} />
         <Route path="/bonuses" element={<Navigate to="/employees?tab=bonuses" replace />} />
         <Route path="/sales" element={<DirectSalesPage />} />
+        <Route path="/sales/receipt" element={<DirectSaleReceiptPage />} />
         <Route path="/sales/history" element={<DirectSalesHistoryPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/sales/heatmap" element={<SalesHeatmapPage />} />
         <Route path="/stock/low-stock" element={<LowStockPage />} />
         <Route path="/stock" element={<StockPage />} />
         <Route path="/appointments" element={<AppointmentsPage />} />
+        <Route path="/appointments/receipt" element={<AppointmentReceiptPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/app-settings" element={<AppSettingsPage />} />
+        <Route path="/getting-started" element={<GettingStartedPage />} />
         <Route path="/appointments/history" element={<AppointmentsHistoryPage />} />
         <Route path="/sms-logs" element={<SmsLogsPage />} />
         {/* Billing */}

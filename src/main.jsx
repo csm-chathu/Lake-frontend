@@ -19,6 +19,10 @@ const queryClient = new QueryClient({
 
 const Router = window.location.protocol === 'file:' ? HashRouter : BrowserRouter;
 
+if (window.electronAPI?.onMainLog) {
+  window.electronAPI.onMainLog((msg) => console.log('%c[main]', 'color:#60a5fa;font-weight:bold', msg));
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <Router>

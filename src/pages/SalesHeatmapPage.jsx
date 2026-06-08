@@ -166,11 +166,19 @@ const SalesHeatmapPage = () => {
       </div>
 
       {loading ? (
-        <div className="rounded-2xl border border-base-300 bg-base-100 p-12 text-center text-slate-500 shadow-sm">
-          <div className="flex justify-center mb-4">
-            <div className="h-12 w-12 rounded-full border-4 border-slate-200 border-t-primary animate-spin" />
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm animate-pulse space-y-4">
+          <div className="flex items-start justify-between">
+            <div className="space-y-2">
+              <div className="h-4 w-36 rounded-full bg-slate-100" />
+              <div className="h-3 w-52 rounded-full bg-slate-100" />
+            </div>
+            <div className="h-4 w-24 rounded-full bg-slate-100" />
           </div>
-          Loading sales heatmap…
+          <div className="grid grid-cols-8 gap-1.5">
+            {[...Array(56)].map((_, i) => (
+              <div key={i} className="h-8 rounded-md bg-slate-100" />
+            ))}
+          </div>
         </div>
       ) : (
         <>

@@ -19,13 +19,19 @@ export default {
         vetcare: {
           primary: '#2563eb',
           'primary-focus': '#1d4ed8',
-          secondary: '#f97316',
-          accent: '#22d3ee',
-          neutral: '#1f2937',
-          'base-100': '#f1f5f9',
+          'primary-content': '#ffffff',
+          secondary: '#f59e0b',
+          'secondary-content': '#ffffff',
+          accent: '#93c5fd',
+          neutral: '#1e3a8a',
+          'base-100': '#ffffff',
+          'base-200': '#f8fafc',
+          'base-300': '#e2e8f0',
+          'base-content': '#1e293b',
           success: '#16a34a',
           warning: '#f97316',
-          error: '#ef4444'
+          error: '#ef4444',
+          info: '#0891b2'
         }
       },
       'light'

@@ -8,7 +8,7 @@ html {
 
 body {
     font-size: 1rem;
-    @apply bg-white text-slate-900;
+    @apply bg-slate-50 text-slate-900;
 }
 
 /* Ensure all form controls use a white background */
@@ -68,21 +68,21 @@ body {
 }
 
 .react-datepicker__day:hover {
-    background-color: #e0e7ff;
-    color: #4f46e5;
+    background-color: #dbeafe;
+    color: #1d4ed8;
 }
 
 .react-datepicker__day--selected,
 .react-datepicker__day--keyboard-selected {
-    background-color: #4f46e5 !important;
+    background-color: #2563eb !important;
     color: white !important;
     font-weight: 600;
 }
 
 .react-datepicker__day--today {
     font-weight: 600;
-    color: #4f46e5;
-    background-color: #eef2ff;
+    color: #2563eb;
+    background-color: #eff6ff;
 }
 
 .react-datepicker__day--disabled {

@@ -1,8 +1,125 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  AlertTriangle,
+  BookOpenText,
+  CheckCircle2,
+  Clipboard,
+  PawPrint,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  UserRound,
+  X,
+} from 'lucide-react';
 import EntityForm from '../components/EntityForm.jsx';
 import EntityTable from '../components/EntityTable.jsx';
 import useEntityApi from '../hooks/useEntityApi.js';
+
+const OwnerCombobox = ({ value, onChange, options, loading }) => {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(-1);
+  const listRef = useRef(null);
+
+  const selectedOption = options.find((o) => String(o.value) === String(value));
+
+  useEffect(() => {
+    setQuery(selectedOption ? selectedOption.label : '');
+  }, [value, selectedOption?.label]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q || selectedOption?.label.toLowerCase() === q) return options;
+    return options.filter(
+      (o) => o.label.toLowerCase().includes(q) || o.phone.toLowerCase().includes(q)
+    );
+  }, [query, options, selectedOption]);
+
+  const selectOption = (opt) => {
+    onChange(String(opt.value));
+    setQuery(opt.label);
+    setOpen(false);
+    setHighlightIdx(-1);
+  };
+
+  const handleKeyDown = (e) => {
+    if (!open) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        e.preventDefault();
+        setOpen(true);
+        setHighlightIdx(0);
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightIdx((i) => Math.min(i + 1, filtered.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightIdx((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightIdx >= 0 && filtered[highlightIdx]) selectOption(filtered[highlightIdx]);
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+      setHighlightIdx(-1);
+    }
+  };
+
+  useEffect(() => {
+    if (open && listRef.current) {
+      const item = listRef.current.children[highlightIdx];
+      if (item) item.scrollIntoView({ block: 'nearest' });
+    }
+  }, [highlightIdx, open]);
+
+  return (
+    <div className="relative w-full">
+      <input
+        type="text"
+        className="input input-bordered input-sm w-full"
+        value={query}
+        placeholder={loading ? 'Loading owners…' : 'Search owner by name or phone…'}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+          setHighlightIdx(0);
+          if (!e.target.value) onChange('');
+        }}
+        onFocus={() => { setOpen(true); setHighlightIdx(0); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={handleKeyDown}
+      />
+      {open && filtered.length > 0 && (
+        <ul
+          ref={listRef}
+          className="absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg"
+        >
+          {filtered.map((opt, i) => (
+            <li
+              key={opt.value}
+              className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-sm transition-colors ${
+                i === highlightIdx ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'
+              }`}
+              onMouseDown={() => selectOption(opt)}
+            >
+              <span className="font-medium">{opt.label}</span>
+              {opt.phone && <span className="text-xs text-slate-400">{opt.phone}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {open && query.trim() && filtered.length === 0 && (
+        <div className="absolute z-50 mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-400 shadow-lg">
+          No owners found for &ldquo;{query}&rdquo;
+        </div>
+      )}
+    </div>
+  );
+};
 
 const capitalizeFirstLetter = (string) => {
   if (typeof string !== 'string' || string.length === 0) {
@@ -327,32 +444,23 @@ const PatientsPage = () => {
               <div className="flex flex-col gap-2">
                 <span className="text-sm font-medium text-slate-600">Owner</span>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <select
-                    value={currentValue}
-                    onChange={(event) => {
-                      setOwnerCreationError('');
-                      onChange(event.target.value);
-                    }}
-                    className="select select-bordered select-sm w-full sm:flex-1"
-                  >
-                    <option value="">
-                      {hasOwners ? 'Select owner' : 'No owners yet'}
-                    </option>
-                    {ownerOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                        {option.phone ? ` • ${option.phone}` : ''}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex-1">
+                    <OwnerCombobox
+                      value={currentValue}
+                      onChange={(v) => { setOwnerCreationError(''); onChange(v); }}
+                      options={ownerOptions}
+                      loading={ownersLoading}
+                    />
+                  </div>
                   <button
                     type="button"
-                    className="btn btn-sm btn-outline sm:w-auto"
+                    className="inline-flex items-center gap-1.5 btn btn-sm btn-outline sm:w-auto"
                     onClick={() => {
                       setShowOwnerCreator(true);
                       setOwnerCreationError('');
                     }}
                   >
+                    <UserRound size={14} />
                     {showOwnerCreator ? 'Owner form open' : 'Add owner'}
                   </button>
                 </div>
@@ -392,7 +500,7 @@ const PatientsPage = () => {
                     <div className="mt-4 flex flex-wrap justify-end gap-2">
                       <button
                         type="button"
-                        className="btn btn-xs btn-ghost"
+                        className="inline-flex items-center gap-1.5 btn btn-xs btn-ghost"
                         onClick={() => {
                           setShowOwnerCreator(false);
                           setNewOwnerName('');
@@ -401,11 +509,11 @@ const PatientsPage = () => {
                         }}
                         disabled={creatingOwner}
                       >
-                        Cancel
+                        <X size={13} /> Cancel
                       </button>
                       <button
                         type="button"
-                        className="btn btn-xs btn-primary"
+                        className="inline-flex items-center gap-1.5 btn btn-xs btn-primary"
                         onClick={async () => {
                           const trimmedName = newOwnerName.trim();
                           if (!trimmedName) {
@@ -434,7 +542,7 @@ const PatientsPage = () => {
                         }}
                         disabled={creatingOwner}
                       >
-                        {creatingOwner ? 'Saving…' : 'Save owner'}
+                        {creatingOwner ? 'Saving…' : (<><Plus size={13} /> Save owner</>)}
                       </button>
                     </div>
                   </div>
@@ -641,26 +749,74 @@ const PatientsPage = () => {
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold text-slate-800">Patients</h1>
-        <p className="text-sm text-slate-500">Maintain accurate records for every companion under your care.</p>
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+          <PawPrint size={22} />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Patients</h1>
+          <p className="text-sm text-slate-400">Maintain accurate records for every companion under your care.</p>
+        </div>
       </div>
+
       {(error || ownersError) && (
-        <div className="alert alert-error shadow-sm">
-          <span>{error || ownersError}</span>
+        <div className="flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <AlertTriangle size={16} className="shrink-0" />
+          {error || ownersError}
         </div>
       )}
+
       {ownersLoading && (
-        <div className="rounded-2xl border border-dashed border-base-300 bg-base-100 p-4 text-sm text-slate-500">
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500">
           Loading owners…
         </div>
       )}
 
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search patients, passbook, owner..."
+              className="input input-bordered w-full pl-9 text-sm"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            {searchQuery && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 btn btn-sm btn-ghost text-slate-500"
+                onClick={() => setSearchQuery('')}
+              >
+                <X size={14} /> Clear
+              </button>
+            )}
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 btn btn-sm rounded-xl bg-blue-600 text-white hover:bg-blue-700 border-blue-600"
+              onClick={() => {
+                setEditingId(null);
+                setFormState(emptyPatient);
+                setShowEditModal(true);
+              }}
+            >
+              <Plus size={14} /> Add new patient
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Passbook Modal */}
-      {showPassbookModal && (
-        <div className="modal modal-open">
-          <div className="modal-box w-full max-w-sm">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">✓ Patient Registered Successfully!</h3>
+      {showPassbookModal && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
+          <div className="relative z-[10000] w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-center gap-2 text-emerald-700">
+              <CheckCircle2 size={20} />
+              <h3 className="text-lg font-bold text-slate-800">Patient Registered Successfully</h3>
+            </div>
             <div className="space-y-4">
               <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
                 <p className="text-xs uppercase tracking-wide text-blue-600 font-semibold mb-2">Passbook Number</p>
@@ -668,17 +824,17 @@ const PatientsPage = () => {
                   <p className="text-2xl font-bold text-blue-800 font-mono">{passbookData?.passbookNumber}</p>
                   <button
                     type="button"
-                    className="btn btn-sm btn-ghost"
+                    className="inline-flex items-center gap-1.5 btn btn-sm btn-ghost"
                     onClick={() => {
                       navigator.clipboard.writeText(passbookData?.passbookNumber);
                     }}
                   >
-                    Copy
+                    <Clipboard size={14} /> Copy
                   </button>
                 </div>
               </div>
 
-              <div className="bg-base-100 rounded-lg p-4 space-y-2 text-sm">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-2 text-sm">
                 <div>
                   <p className="text-xs text-slate-500 uppercase tracking-wide">Patient Name</p>
                   <p className="font-medium text-slate-800">{passbookData?.name}</p>
@@ -704,117 +860,105 @@ const PatientsPage = () => {
               </div>
 
               <p className="text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded p-3">
-                📖 <strong>Mark this passbook number in your physical record book to track this patient.</strong>
+                <span className="inline-flex items-center gap-1.5">
+                  <BookOpenText size={14} className="text-amber-700" />
+                  <strong>Mark this passbook number in your physical record book to track this patient.</strong>
+                </span>
               </p>
             </div>
 
-            <div className="modal-action mt-6">
+            <div className="mt-6">
               <button
                 type="button"
-                className="btn btn-primary w-full"
+                className="inline-flex w-full items-center justify-center gap-1.5 btn btn-sm rounded-xl bg-blue-600 text-white hover:bg-blue-700 border-blue-600"
                 onClick={() => {
                   setShowPassbookModal(false);
                   setPassbookData(null);
                 }}
               >
+                <CheckCircle2 size={14} />
                 Done
               </button>
             </div>
           </div>
-          <div className="modal-backdrop fixed inset-0 p-0 m-0 z-50" onClick={() => {
+          <div className="absolute inset-0" onClick={() => {
             setShowPassbookModal(false);
             setPassbookData(null);
           }}></div>
         </div>
-      )}
+      , document.body)}
 
       {/* Delete confirmation modal */}
-      {showDeleteConfirm && (
-        <div className="modal modal-open" >
-          <div className="modal-box w-full max-w-sm">
-            <h3 className="text-lg font-bold text-slate-800 mb-2">Confirm deletion</h3>
-            <p className="text-sm text-slate-600">Are you sure you want to delete this patient? This action cannot be undone.</p>
-            <div className="modal-action mt-6 flex gap-2">
-              <button type="button" className="btn btn-ghost" onClick={cancelDelete}>Cancel</button>
-              <button type="button" className="btn btn-error" onClick={confirmDelete}>Delete</button>
+      {showDeleteConfirm && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 backdrop-blur-sm" >
+          <div className="absolute inset-0 bg-black/40" onClick={cancelDelete}></div>
+          <div className="relative z-[10000] w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+              <Trash2 size={22} />
+            </div>
+            <h3 className="mb-1 text-base font-bold text-slate-800">Delete patient?</h3>
+            <p className="mb-5 text-sm text-slate-500">Are you sure you want to delete this patient? This action cannot be undone.</p>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="inline-flex items-center gap-1.5 btn btn-sm btn-ghost rounded-xl" onClick={cancelDelete}><X size={14} /> Cancel</button>
+              <button type="button" className="inline-flex items-center gap-1.5 btn btn-sm rounded-xl bg-rose-600 text-white hover:bg-rose-700 border-rose-600" onClick={confirmDelete}><Trash2 size={14} /> Delete</button>
             </div>
           </div>
-          <div className="modal-backdrop fixed inset-0 p-0 m-0 z-50" onClick={cancelDelete}></div>
         </div>
-      )}
+      , document.body)}
 
       {/* Edit Patient Modal */}
-      {showEditModal && (
-        <div className="modal modal-open" style={{ marginTop: '0px' }}>
-          <div className="modal-box w-full max-w-5xl max-h-[90vh] overflow-y-auto">
-            <button
-              type="button"
-              className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-              onClick={resetForm}
-            >
-              ✕
-            </button>
-            <div className="mb-4 flex items-start justify-between gap-4 pr-10">
-              <h3 className="text-lg font-bold text-slate-800">{editingId ? 'Edit patient' : 'Register new patient'}</h3>
-              <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-1 text-right">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-700">Passbook</p>
-                <p className="font-mono text-sm font-bold text-sky-900">{formState.passbookNumber || 'Pending'}</p>
+      {showEditModal && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm" style={{ marginTop: '0px' }}>
+          <div className="relative z-[10000] w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-100 bg-white px-6 py-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                  {editingId ? <Pencil size={16} /> : <Plus size={16} />}
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">{editingId ? 'Edit patient' : 'Register new patient'}</h3>
+                  <p className="text-xs text-slate-400">Capture patient details with species and owner mapping.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-1 text-right">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-700">Passbook</p>
+                  <p className="font-mono text-sm font-bold text-sky-900">{formState.passbookNumber || 'Pending'}</p>
+                </div>
+                <button
+                  type="button"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  onClick={resetForm}
+                >
+                  <X size={16} />
+                </button>
               </div>
             </div>
-            <EntityForm
-              fields={fields}
-              values={formState}
-              onChange={handleChange}
-              onSubmit={handleSubmit}
-              submitLabel={editingId ? 'Update patient' : 'Create patient'}
-              isEditing={Boolean(editingId)}
-              onCancel={resetForm}
-              submitLoading={isSaving}
-              className="grid grid-cols-1 md:grid-cols-6 gap-4"
-              onClear={() => setFormState(emptyPatient)}
-              clearLabel="Clear form"
-            />
+            <div className="p-6">
+              <EntityForm
+                fields={fields}
+                values={formState}
+                onChange={handleChange}
+                onSubmit={handleSubmit}
+                submitLabel={editingId ? 'Update patient' : 'Create patient'}
+                isEditing={Boolean(editingId)}
+                onCancel={resetForm}
+                submitLoading={isSaving}
+                className="grid grid-cols-1 md:grid-cols-6 gap-4"
+                onClear={() => setFormState(emptyPatient)}
+                clearLabel="Clear form"
+              />
+            </div>
           </div>
-          <form method="dialog" className="modal-backdrop" onClick={resetForm}></form>
+          <div className="absolute inset-0" onClick={resetForm}></div>
         </div>
-      )}
-
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search patients, passbook, owner..."
-            className="input input-sm input-bordered w-full max-w-md"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              className="btn btn-sm btn-ghost"
-              onClick={() => setSearchQuery('')}
-            >
-              Clear
-            </button>
-          )}
-        </div>
-        <button
-          type="button"
-          className="btn btn-sm btn-primary"
-          onClick={() => {
-            setEditingId(null);
-            setFormState(emptyPatient);
-            setShowEditModal(true);
-          }}
-        >
-          + Add new patient
-        </button>
-      </div>
+      , document.body)}
 
       <EntityTable
         columns={columns}
         data={items}
         loading={loading}
+        loadingMessage="Loading patients..."
         onEdit={handleEdit}
         onDelete={handleDelete}
         emptyMessage="No patients recorded yet."

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
 
 const EntityTable = ({
   columns,
@@ -7,6 +8,7 @@ const EntityTable = ({
   onEdit,
   onDelete,
   emptyMessage = 'No items found.',
+  loadingMessage = 'Loading data...',
   bodyMaxHeightClass = 'max-h-[520px]',
   enableSearch = true,
   searchPlaceholder = 'Search...'
@@ -56,9 +58,37 @@ const EntityTable = ({
   }, [columns, data, enableSearch, searchTerm]);
 
   if (loading) {
+    const colCount = columns.length + (onEdit || onDelete ? 1 : 0);
     return (
-      <div className="rounded-2xl border border-base-300 bg-base-100 p-6 text-center text-slate-500 shadow-sm">
-        Loading…
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-auto">
+          <table className="table w-full">
+            <thead className="bg-slate-50">
+              <tr>
+                {columns.map((col) => (
+                  <th key={col.accessor || col.header} className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    {col.header}
+                  </th>
+                ))}
+                {(onEdit || onDelete) && <th />}
+              </tr>
+            </thead>
+            <tbody className="animate-pulse">
+              {[...Array(6)].map((_, i) => (
+                <tr key={i} className="border-t border-slate-100">
+                  {[...Array(colCount)].map((__, j) => (
+                    <td key={j} className="py-3 px-4">
+                      <div
+                        className="h-3 rounded-full bg-slate-100"
+                        style={{ width: j === colCount - 1 ? '40%' : j === 0 ? '55%' : '75%' }}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   }
@@ -113,24 +143,28 @@ const EntityTable = ({
                   ))}
                   {(onEdit || onDelete) && (
                     <td className="whitespace-nowrap text-right">
-                      {onEdit && (
-                        <button
-                          type="button"
-                          className="btn btn-xs btn-outline btn-primary mr-2"
-                          onClick={() => onEdit(item)}
-                        >
-                          Edit
-                        </button>
-                      )}
-                      {onDelete && (
-                        <button
-                          type="button"
-                          className="btn btn-xs btn-outline btn-error"
-                          onClick={() => onDelete(item.id)}
-                        >
-                          Delete
-                        </button>
-                      )}
+                      <div className="inline-flex items-center gap-1">
+                        {onEdit && (
+                          <button
+                            type="button"
+                            title="Edit"
+                            className="inline-flex items-center justify-center h-7 w-7 rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
+                            onClick={() => onEdit(item)}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        )}
+                        {onDelete && (
+                          <button
+                            type="button"
+                            title="Delete"
+                            className="inline-flex items-center justify-center h-7 w-7 rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 transition"
+                            onClick={() => onDelete(item.id)}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   )}
                 </tr>

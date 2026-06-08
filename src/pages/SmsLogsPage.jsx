@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import client from '../api/client.js';
 import Card from '../components/Card.jsx';
@@ -83,7 +84,7 @@ const SmsLogsPage = () => {
       </Card>
 
       {/* Detail Modal */}
-      {selectedLog && (
+      {selectedLog && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
@@ -147,7 +148,7 @@ const SmsLogsPage = () => {
             </div>
           </Card>
         </div>
-      )}
+      , document.body)}
     </section>
   );
 };

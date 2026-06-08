@@ -1,23 +1,24 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Printer,
+  Search,
+  ScrollText,
+  X,
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import EntityTable from '../components/EntityTable.jsx';
-import InvoicePrintModal from '../components/InvoicePrintModal.jsx';
 import api from '../api/client.js';
 
 const currencyFormatter = new Intl.NumberFormat('en-LK', { style: 'currency', currency: 'LKR' });
 
-const formatSaleDate = (value) => {
-  if (!value) {
-    return '—';
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) {
-    return '—';
-  }
-  return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-};
+const formatMoney = (value) => currencyFormatter.format(Number(value) || 0);
 
 const DirectSalesHistoryPage = () => {
+  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -26,13 +27,9 @@ const DirectSalesHistoryPage = () => {
   const [perPage, setPerPage] = useState(10);
   const [totalRecords, setTotalRecords] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [invoiceModal, setInvoiceModal] = useState({ open: false, data: null });
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-
-  const closeInvoiceModal = useCallback(() => {
-    setInvoiceModal({ open: false, data: null });
-  }, []);
+  const hasDateFilter = dateFrom || dateTo;
 
   useEffect(() => {
     setPage(1);
@@ -87,35 +84,53 @@ const DirectSalesHistoryPage = () => {
         unit: Number(entry.unitPrice) || 0
       };
     });
-
-    setInvoiceModal({
-      open: true,
-      data: {
-        doctorCharge: 0,
-        surgeryCharge: 0,
-        otherCharge: 0,
-        medicinesSubtotal: Number(sale.subtotal) || 0,
-        discount: Number(sale.discount) || 0,
-        estimated: Number(sale.total) || 0,
-        patientName: sale.saleReference || `Sale #${sale.id}`,
-        appointmentId: null,
-        medicines: sale.items || [],
-        lineItems
+    navigate('/sales/receipt', {
+      state: {
+        from: 'history',
+        sale: {
+          invoiceReference: sale.saleReference || `Sale #${sale.id}`,
+          saleDate: sale.date || null,
+          discount: Number(sale.discount) || 0,
+          serviceCharge: Number(sale.serviceCharge) || 0,
+          estimated: Number(sale.total) || 0,
+          paymentType: sale.paymentType || 'cash',
+          paymentStatus: sale.paymentStatus || 'paid',
+          lineItems,
+        }
       }
     });
-  }, []);
+  }, [navigate]);
 
   const columns = useMemo(
     () => [
       {
-        header: 'Date',
+        header: 'Date & Time',
         accessor: 'date',
-        render: (sale) => formatSaleDate(sale.date)
+        render: (sale) => {
+          const date = new Date(sale.date);
+          if (Number.isNaN(date.valueOf())) {
+            return '—';
+          }
+
+          return (
+            <div className="flex flex-col gap-0.5">
+              <span className="font-medium text-slate-800">{date.toLocaleDateString()}</span>
+              <span className="text-xs text-slate-400">{date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+          );
+        }
       },
       {
         header: 'Reference',
         accessor: 'saleReference',
-        render: (sale) => sale.saleReference || `Sale #${sale.id}`
+        render: (sale) => (
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+              #{sale.id}
+            </span>
+            <span className="font-medium text-slate-800">{sale.saleReference || `Sale #${sale.id}`}</span>
+          </div>
+        )
       },
       {
         header: 'Items & Price',
@@ -137,8 +152,8 @@ const DirectSalesHistoryPage = () => {
 
                 return (
                   <div key={entry.id} className="flex items-center justify-between gap-3 text-xs">
-                    <span className="text-slate-700">{label} (x{qty})</span>
-                    <span className="font-medium text-slate-800">{currencyFormatter.format(lineTotal)}</span>
+                    <span className="text-slate-700">{label} <span className="text-slate-400">x{qty}</span></span>
+                    <span className="font-medium text-slate-800">{formatMoney(lineTotal)}</span>
                   </div>
                 );
               })}
@@ -151,21 +166,23 @@ const DirectSalesHistoryPage = () => {
         accessor: 'total',
         render: (sale) => (
           <div className="space-y-1 text-xs">
-            <p>Subtotal: <span className="font-medium">{currencyFormatter.format(Number(sale.subtotal) || 0)}</span></p>
-            <p>Discount: <span className="font-medium">{currencyFormatter.format(Number(sale.discount) || 0)}</span></p>
-            <p className="text-sm font-semibold">Total: {currencyFormatter.format(Number(sale.total) || 0)}</p>
+            <p className="text-slate-600">Subtotal: <span className="font-medium text-slate-800">{formatMoney(sale.subtotal)}</span></p>
+            <p className="text-slate-600">Discount: <span className="font-medium text-emerald-700">{formatMoney(sale.discount)}</span></p>
+            <p className="text-sm font-semibold text-slate-900">Total: {formatMoney(sale.total)}</p>
           </div>
         )
       },
       {
-        header: 'Action',
+        header: '',
         accessor: 'action',
         render: (sale) => (
           <button
             type="button"
-            className="btn btn-xs btn-outline btn-primary"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition"
             onClick={() => openReprint(sale)}
           >
+            <Eye size={13} />
+            <Printer size={13} />
             View & Reprint
           </button>
         )
@@ -176,55 +193,63 @@ const DirectSalesHistoryPage = () => {
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-800">Direct Sales History</h1>
-            <p className="text-sm text-slate-500">View sold items with prices and reprint invoices anytime.</p>
-          </div>
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+          <ScrollText size={22} />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Direct Sales History</h1>
+          <p className="text-sm text-slate-400">Browse previous direct sales and reprint invoices in one place.</p>
         </div>
       </div>
 
       {error && (
-        <div className="alert alert-error shadow-sm">
-          <span>{error}</span>
+        <div className="flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <AlertTriangle size={16} className="shrink-0" />
+          {error}
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <input
-          type="search"
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search reference, item, payment..."
-          className="input input-sm input-bordered flex-1 min-w-[200px]"
-        />
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1 text-xs text-slate-500 whitespace-nowrap">
-            From
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search reference or item..."
+              className="input input-bordered w-full pl-9 text-sm"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Date from</label>
             <input
               type="date"
               className="input input-sm input-bordered"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
             />
-          </label>
-          <label className="flex items-center gap-1 text-xs text-slate-500 whitespace-nowrap">
-            To
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Date to</label>
             <input
               type="date"
               className="input input-sm input-bordered"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
             />
-          </label>
-          {(dateFrom || dateTo) && (
+          </div>
+
+          {hasDateFilter && (
             <button
               type="button"
-              className="btn btn-xs btn-ghost text-slate-500"
+              className="inline-flex items-center gap-1.5 btn btn-sm btn-ghost text-slate-500"
               onClick={() => { setDateFrom(''); setDateTo(''); }}
             >
-              ✕ Clear dates
+              <X size={14} /> Clear dates
             </button>
           )}
         </div>
@@ -234,36 +259,48 @@ const DirectSalesHistoryPage = () => {
         columns={columns}
         data={items}
         loading={loading}
+        loadingMessage="Loading sales history..."
         bodyMaxHeightClass="max-h-[72vh]"
         emptyMessage="No direct sales recorded yet."
         enableSearch={false}
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
         <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400 uppercase tracking-wide">Rows per page</span>
           <select
             className="select select-sm select-bordered"
             value={perPage}
             onChange={(e) => setPerPage(Number(e.target.value) || 10)}
           >
-            {[10, 20, 50].map((size) => <option key={size} value={size}>{size} / page</option>)}
+            {[10, 20, 50].map((size) => <option key={size} value={size}>{size}</option>)}
           </select>
+          <span className="ml-2 text-sm text-slate-500">
+            <span className="font-semibold text-slate-800">{totalRecords}</span> records total
+          </span>
         </div>
-        <div className="flex items-center gap-2 text-sm text-slate-600">
-          <span>{totalRecords} record(s)</span>
-          <button className="btn btn-xs btn-outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Prev</button>
-          <span>Page {page} / {totalPages}</span>
-          <button className="btn btn-xs btn-outline" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
+
+        <div className="flex items-center gap-1">
+          <button
+            className="inline-flex items-center gap-1 btn btn-sm btn-ghost rounded-lg px-3"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            <ChevronLeft size={15} /> Prev
+          </button>
+          <span className="rounded-lg bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">
+            {page} / {totalPages}
+          </span>
+          <button
+            className="inline-flex items-center gap-1 btn btn-sm btn-ghost rounded-lg px-3"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            Next <ChevronRight size={15} />
+          </button>
         </div>
       </div>
 
-      <InvoicePrintModal
-        open={invoiceModal.open}
-        invoice={invoiceModal.data}
-        onClose={closeInvoiceModal}
-        currencyFormatter={currencyFormatter}
-        showDoctorCharge={false}
-      />
     </section>
   );
 };

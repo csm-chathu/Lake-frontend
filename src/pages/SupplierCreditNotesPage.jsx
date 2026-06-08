@@ -1,4 +1,6 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { AlertTriangle, Eye, FileText, PackageCheck, Plus, Search, X } from 'lucide-react';
 import {
   createSupplierCreditNote,
   fetchSupplierCreditNotes,
@@ -36,22 +38,32 @@ const normalizeSCN = (scn) => ({
 const SCNDetailModal = ({ scn, suppliers, onClose }) => {
   const supplier = suppliers.find((s) => s.id === scn.supplierId || s.id === scn.supplier_id);
   const items = Array.isArray(scn.items) ? scn.items : [];
-  return (
-    <dialog open className="modal modal-open">
-      <div className="modal-box w-11/12 max-w-2xl bg-white text-slate-900">
-        <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button>
-        <div className="mb-4">
-          <h3 className="text-lg font-bold text-slate-900">{scn.creditNoteNumber}</h3>
-          <p className="text-xs text-slate-400">
-            Supplier: {supplier?.name ?? '—'}
-            {scn.creditNoteDate && ` · Date: ${new Date(scn.creditNoteDate).toLocaleDateString('en-LK')}`}
-          </p>
-          {scn.returnStock && (
-            <span className="badge badge-xs badge-info mt-1">Stock Returned</span>
-          )}
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 backdrop-blur-sm">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative z-[10000] w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-slate-50 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+              <FileText size={18} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">{scn.creditNoteNumber}</h3>
+              <p className="text-xs text-slate-400">
+                Supplier: {supplier?.name ?? '—'}
+                {scn.creditNoteDate && ` · Date: ${new Date(scn.creditNoteDate).toLocaleDateString('en-LK')}`}
+              </p>
+              {scn.returnStock && (
+                <span className="mt-1 inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">Stock returned</span>
+              )}
+            </div>
+          </div>
+          <button onClick={onClose} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+            <X size={16} />
+          </button>
         </div>
 
-        <div className="rounded-md border border-slate-200 overflow-hidden mb-4">
+        <div className="m-6 mb-4 overflow-hidden rounded-md border border-slate-200">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
             <thead className="bg-primary/5 text-slate-600 text-[11px] uppercase">
               <tr>
@@ -81,11 +93,10 @@ const SCNDetailModal = ({ scn, suppliers, onClose }) => {
             </tfoot>
           </table>
         </div>
-        {scn.notes && <p className="text-xs text-slate-400">Notes: {scn.notes}</p>}
+          {scn.notes && <p className="px-6 pb-6 text-xs text-slate-400">Notes: {scn.notes}</p>}
       </div>
-      <div className="modal-backdrop" onClick={onClose} />
-    </dialog>
-  );
+      </div>
+  , document.body);
 };
 
 // ── CreateSCNModal ────────────────────────────────────────────────────────────
@@ -140,16 +151,27 @@ const CreateSCNModal = ({ suppliers, supplierInvoices, stockItems, onClose, onCr
     }
   };
 
-  return (
-    <dialog open className="modal modal-open">
-      <div className="modal-box w-11/12 max-w-2xl bg-white text-slate-900">
-        <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button>
-        <h3 className="text-lg font-bold text-slate-900 mb-4 text-slate-900">New Supplier Credit Note</h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 backdrop-blur-sm">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative z-[10000] w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-slate-50 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+              <FileText size={18} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">New Supplier Credit Note</h3>
+              <p className="text-xs text-slate-400">Record returns, refunds, and supplier credit adjustments.</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X size={16} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4 p-6">
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-slate-400">Supplier *</span>
-              <select required className="select select-sm w-full"
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Supplier *</span>
+              <select required className="select select-sm select-bordered w-full"
                 value={form.supplierId}
                 onChange={(e) => { setField('supplierId', e.target.value); setField('supplierInvoiceId', ''); }}>
                 <option value="">Select…</option>
@@ -157,8 +179,8 @@ const CreateSCNModal = ({ suppliers, supplierInvoices, stockItems, onClose, onCr
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-slate-400">Against Supplier Invoice (optional)</span>
-              <select className="select select-sm w-full"
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Against Supplier Invoice (optional)</span>
+              <select className="select select-sm select-bordered w-full"
                 value={form.supplierInvoiceId} onChange={(e) => setField('supplierInvoiceId', e.target.value)}>
                 <option value="">— None —</option>
                 {filteredInvoices.map((inv) => (
@@ -167,30 +189,30 @@ const CreateSCNModal = ({ suppliers, supplierInvoices, stockItems, onClose, onCr
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-slate-400">Credit Note Date</span>
-              <input type="date" className="input input-sm w-full"
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Credit Note Date</span>
+              <input type="date" className="input input-sm input-bordered w-full"
                 value={form.creditNoteDate} onChange={(e) => setField('creditNoteDate', e.target.value)} />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-slate-400">Reason</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Reason</span>
               <input type="text" placeholder="Damaged goods, overcharge…"
-                className="input input-sm w-full"
+                className="input input-sm input-bordered w-full"
                 value={form.reason} onChange={(e) => setField('reason', e.target.value)} />
             </label>
           </div>
 
           {/* Return stock toggle */}
-          <label className="flex items-center gap-3 cursor-pointer">
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
             <input type="checkbox" className="checkbox checkbox-sm checkbox-primary"
               checked={form.returnStock} onChange={(e) => setField('returnStock', e.target.checked)} />
-            <span className="text-sm text-slate-300">Return stock to inventory (decrement stock quantity)</span>
+            <span className="text-sm text-slate-600">Return stock to inventory (decrement stock quantity)</span>
           </label>
 
           {/* Items */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-medium text-slate-400 uppercase tracking-widest">Items</span>
-              <button type="button" onClick={addLine} className="btn btn-xs btn-outline btn-primary">+ Add</button>
+              <button type="button" onClick={addLine} className="inline-flex items-center gap-1.5 btn btn-xs btn-outline btn-primary rounded-lg"><Plus size={12} /> Add</button>
             </div>
             {form.items.map((li, idx) => (
               <div key={idx} className="rounded-lg border border-slate-200 bg-slate-50 p-3 mb-2">
@@ -208,12 +230,12 @@ const CreateSCNModal = ({ suppliers, supplierInvoices, stockItems, onClose, onCr
                     {fmt.format((Number(li.quantity)||0)*(Number(li.unitCost)||0))}
                   </span>
                   <button type="button" disabled={form.items.length === 1}
-                    className="btn btn-xs btn-ghost text-error col-span-1" onClick={() => removeLine(idx)}>✕</button>
+                    className="btn btn-xs btn-ghost text-error col-span-1" onClick={() => removeLine(idx)}><X size={12} /></button>
                 </div>
                 {form.returnStock && (
                   <div className="mt-2">
                     <p className="text-[10px] text-slate-500 mb-0.5">Stock Item (for stock deduction)</p>
-                    <select className="select select-xs w-full w-full"
+                    <select className="select select-xs select-bordered w-full"
                       value={li.stockItemId || ''}
                       onChange={(e) => setLine(idx, 'stockItemId', e.target.value)}>
                       <option value="">— Skip stock deduction —</option>
@@ -223,29 +245,34 @@ const CreateSCNModal = ({ suppliers, supplierInvoices, stockItems, onClose, onCr
                 )}
               </div>
             ))}
-            <div className="text-right text-sm font-semibold text-white mt-1">
+            <div className="mt-1 text-right text-sm font-semibold text-slate-800">
               Credit Total: {fmt.format(calcTotal(form.items))}
             </div>
           </div>
 
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-slate-400">Notes</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Notes</span>
             <textarea rows={2} className="textarea textarea-bordered w-full text-sm"
               value={form.notes} onChange={(e) => setField('notes', e.target.value)} />
           </label>
 
-          {err && <p className="text-error text-xs">{err}</p>}
+          {err && (
+            <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              <AlertTriangle size={14} />
+              {err}
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" className="btn btn-sm btn-ghost" onClick={onClose}>Cancel</button>
-            <button type="submit" disabled={saving} className="btn btn-sm btn-primary">
+            <button type="button" className="inline-flex items-center gap-1.5 btn btn-sm btn-ghost rounded-xl" onClick={onClose}><X size={14} /> Cancel</button>
+            <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 btn btn-sm btn-primary rounded-xl">
+              <FileText size={14} />
               {saving ? 'Creating…' : 'Create Credit Note'}
             </button>
           </div>
         </form>
       </div>
-      <div className="modal-backdrop" onClick={onClose} />
-    </dialog>
-  );
+    </div>
+  , document.body);
 };
 
 // ── SupplierCreditNotesPage ───────────────────────────────────────────────────
@@ -257,6 +284,7 @@ const SupplierCreditNotesPage = () => {
   const [stockItems, setStockItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
+  const [query, setQuery] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [detailSCN, setDetailSCN] = useState(null);
 
@@ -301,14 +329,33 @@ const SupplierCreditNotesPage = () => {
         header: 'View',
         accessor: 'id',
         render: (scn) => (
-          <button className="btn btn-xs btn-ghost text-primary" onClick={() => setDetailSCN(scn)} aria-label="View credit note">
-            👁️
+          <button className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100" onClick={() => setDetailSCN(scn)} aria-label="View credit note">
+            <Eye size={13} />
           </button>
         ),
       },
     ],
     [supplierById]
   );
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredSCNs = useMemo(() => {
+    if (!normalizedQuery) {
+      return scns;
+    }
+    return scns.filter((scn) => {
+      const haystack = [
+        scn.creditNoteNumber,
+        supplierById[String(scn.supplierId)]?.name,
+        scn.reason,
+        scn.notes,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(normalizedQuery);
+    });
+  }, [scns, supplierById, normalizedQuery]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -334,24 +381,68 @@ const SupplierCreditNotesPage = () => {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Supplier Credit Notes</h1>
-          <p className="text-xs text-slate-400 mt-0.5">Returns, refunds, and credit adjustments from suppliers</p>
+    <section className="space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+          <FileText size={22} />
         </div>
-        <button className="btn btn-sm btn-primary" onClick={() => setShowCreate(true)}>+ New Credit Note</button>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Supplier Credit Notes</h1>
+          <p className="text-sm text-slate-400">Capture supplier returns, refunds, and credit adjustments.</p>
+        </div>
       </div>
 
-      {err && <div className="alert alert-error text-sm">{err}</div>}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="relative min-w-[220px] flex-1">
+            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Search credit notes</span>
+            <Search size={15} className="pointer-events-none absolute left-3 top-[33px] text-slate-400" />
+            <input
+              type="search"
+              className="input input-bordered w-full pl-9 text-sm"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search note number, supplier, reason"
+            />
+          </label>
+          <button className="inline-flex items-center gap-2 btn btn-sm btn-primary rounded-xl" onClick={() => setShowCreate(true)}>
+            <Plus size={14} /> New credit note
+          </button>
+        </div>
+      </div>
+
+      {err && (
+        <div className="flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <AlertTriangle size={16} className="shrink-0" />
+          {err}
+        </div>
+      )}
 
       <EntityTable
         columns={columns}
-        data={scns}
+        data={filteredSCNs}
         loading={loading}
-        emptyMessage="No credit notes."
+        loadingMessage="Loading supplier credit notes..."
+        emptyMessage={normalizedQuery ? 'No credit notes match your search.' : 'No credit notes.'}
         searchPlaceholder="Search credit note, supplier, reason..."
       />
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Shown</p>
+          <p className="mt-1 text-lg font-bold text-slate-800">{filteredSCNs.length}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400"><PackageCheck size={12} /> Stock Returned</p>
+          <p className="mt-1 text-lg font-bold text-violet-700">{scns.filter((scn) => scn.returnStock).length}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Credit Total</p>
+          <p className="mt-1 text-lg font-bold text-emerald-700">
+            {fmt.format(scns.reduce((sum, scn) => sum + (Number(scn.totalAmount) || 0), 0))}
+          </p>
+        </div>
+      </div>
 
       {showCreate && (
         <CreateSCNModal
@@ -369,7 +460,7 @@ const SupplierCreditNotesPage = () => {
           onClose={() => setDetailSCN(null)}
         />
       )}
-    </div>
+    </section>
   );
 };
 

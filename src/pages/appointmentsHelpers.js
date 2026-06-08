@@ -50,6 +50,8 @@ export const createEmptyVaccinationPlan = () => ({
 
 export const createEmptyAppointment = () => ({
   patientId: '',
+  isWalkIn: false,
+  walkInName: '',
   date: getCurrentDateTimeLocal(),
   reason: '',
   status: 'completed',
@@ -276,7 +278,9 @@ export const buildAppointmentPayload = (formState = createEmptyAppointment()) =>
     medicines: mapMedicinesForPayload(formState.medicines),
     paymentType,
     paymentStatus,
-    settledAt: paymentStatus === 'paid' ? toIsoOrNull(formState.settledAt) : null
+    settledAt: paymentStatus === 'paid' ? toIsoOrNull(formState.settledAt) : null,
+    isWalkIn: Boolean(formState.isWalkIn),
+    walkInName: sanitizeText(formState.walkInName) || null
   };
 
   const vaccinationPlan = prepareVaccinationPlan(formState.vaccinationPlan);

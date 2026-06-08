@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardList, Clock3, Eye, Pencil, Pill, Users, X } from 'lucide-react';
 import AppointmentMedicineSelector, { calculateMedicinesTotal } from '../components/AppointmentMedicineSelector.jsx';
-import EntityForm from '../components/EntityForm.jsx';
 import PatientSearch from '../components/PatientSearch.jsx';
 import QuickPatientRegistrationCard from '../components/QuickPatientRegistrationCard.jsx';
-import InvoicePrintModal from '../components/InvoicePrintModal.jsx';
 import PatientInfoModal from '../components/PatientInfoModal.jsx';
 import { paymentStatusOptions, statusOptions } from '../constants/appointments.js';
 import useEntityApi from '../hooks/useEntityApi.js';
 import {
   fetchPatientReports,
-  sendAppointmentInvoiceSms,
   syncPatientReports as syncPatientReportsRequest,
   uploadDiagnosticReport
 } from '../api/appointments.js';
@@ -52,6 +51,98 @@ const capitalizeFirstLetter = (string) => {
   return string.charAt(0).toUpperCase() + string.slice(1);
 };
 
+// ── Reason input with suggestion dropdown ─────────────────────────────────────
+const ReasonInput = ({ value, onChange, placeholder, inputRef, suggestions = [], onEnterNoDropdown }) => {
+  const [open, setOpen] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(-1);
+  const [dropdownStyle, setDropdownStyle] = useState(null);
+  const ownRef = useRef(null);
+  const resolvedRef = inputRef || ownRef;
+
+  const filtered = useMemo(() => {
+    const q = (value || '').trim().toLowerCase();
+    return suggestions.filter((s) => s.toLowerCase().includes(q) && s.toLowerCase() !== q);
+  }, [value, suggestions]);
+
+  const showDropdown = open && filtered.length > 0;
+
+  const updateDropdownStyle = useCallback(() => {
+    const el = resolvedRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const openUpward = spaceBelow < 220 && spaceAbove > spaceBelow;
+    setDropdownStyle(
+      openUpward
+        ? { position: 'fixed', left: rect.left, bottom: window.innerHeight - rect.top + 4, width: rect.width }
+        : { position: 'fixed', left: rect.left, top: rect.bottom + 4, width: rect.width }
+    );
+  }, [resolvedRef]);
+
+  const select = (s) => { onChange(s); setOpen(false); setHighlightIdx(-1); };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') { setOpen(false); setHighlightIdx(-1); return; }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!showDropdown) return;
+      setHighlightIdx((prev) => Math.min(prev + 1, filtered.length - 1));
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!showDropdown) return;
+      setHighlightIdx((prev) => Math.max(prev - 1, 0));
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (showDropdown && highlightIdx >= 0 && filtered[highlightIdx]) {
+        select(filtered[highlightIdx]);
+      } else {
+        setOpen(false);
+        onEnterNoDropdown?.();
+      }
+    }
+  };
+
+  return (
+    <div className="relative">
+      <input
+        ref={resolvedRef}
+        type="text"
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); setHighlightIdx(-1); updateDropdownStyle(); }}
+        onFocus={() => { if (filtered.length > 0) { updateDropdownStyle(); setOpen(true); } }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className="input input-sm input-bordered w-full bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100"
+      />
+      {showDropdown && dropdownStyle && createPortal(
+        <ul
+          className="z-50 max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg"
+          style={dropdownStyle}
+        >
+          {filtered.map((s, i) => (
+            <li
+              key={s}
+              className={`cursor-pointer px-3 py-2 text-sm transition-colors ${
+                i === highlightIdx ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-700 hover:bg-slate-50'
+              }`}
+              onMouseDown={() => select(s)}
+            >
+              {s}
+            </li>
+          ))}
+        </ul>,
+        document.body
+      )}
+    </div>
+  );
+};
+
 const AppointmentsPage = () => {
   const appointmentApi = useEntityApi('appointments');
   const patientsApi = useEntityApi('patients');
@@ -88,12 +179,9 @@ const AppointmentsPage = () => {
   const [dateEditing, setDateEditing] = useState(false); // controls whether the appointment time input is editable
   const [successMessage, setSuccessMessage] = useState('');
   const [formError, setFormError] = useState('');
-  const [invoiceModal, setInvoiceModal] = useState({ open: false, data: null });
   const [showPatientModal, setShowPatientModal] = useState(false);
-  const [invoiceSmsState, setInvoiceSmsState] = useState({ sending: false, status: null, message: '' });
   const [isSaving, setIsSaving] = useState(false);
   const [patientSearchQuery, setPatientSearchQuery] = useState('');
-  const [profileTab, setProfileTab] = useState('owner');
   const [reportUploadState, setReportUploadState] = useState({});
 
   // holds latest quick registration form values when user is inputting a new patient
@@ -116,8 +204,8 @@ const AppointmentsPage = () => {
     [patients, selectedPatientId]
   );
 
-  // treat treatment as started as soon as a patient id is chosen
-  const startedTreatment = Boolean(formState.patientId);
+  // treat treatment as started as soon as a patient id is chosen or walk-in mode is active
+  const startedTreatment = Boolean(formState.patientId) || Boolean(formState.isWalkIn);
 
   useEffect(() => {
     // whenever search text changes we should abandon any partial registration data
@@ -127,7 +215,6 @@ const AppointmentsPage = () => {
     if (!patientSearchQuery.trim()) {
       if (formState.patientId) {
         setDateEditing(false);
-        setProfileTab('owner');
         setFormState((prev) => ({
           ...prev,
           patientId: ''
@@ -141,7 +228,6 @@ const AppointmentsPage = () => {
     const currentName = selectedPatient?.name || '';
     if (patientSearchQuery !== currentName && formState.patientId) {
       setDateEditing(false);
-      setProfileTab('owner');
       setFormState((prev) => ({
         ...prev,
         patientId: ''
@@ -150,7 +236,7 @@ const AppointmentsPage = () => {
     }
   }, [patientSearchQuery, selectedPatient, formState.patientId]);
 
-  const formStateRef = useRef(formState);
+const formStateRef = useRef(formState);
 
   useEffect(() => {
     formStateRef.current = formState;
@@ -356,7 +442,6 @@ const AppointmentsPage = () => {
   }, [items]);
 
   const normalizedReason = formState.reason ? formState.reason.trim().toLowerCase() : '';
-  const isVaccineAppointment = normalizedReason.includes('vaccine');
 
   useEffect(() => {
     if (!hasVaccineMedicine) {
@@ -456,39 +541,6 @@ const AppointmentsPage = () => {
     });
   }, [formState.reason, formState.date]);
 
-  const medicinesTotal = useMemo(
-    () => calculateMedicinesTotal(formState.medicines || [], brandLookup),
-    [formState.medicines, brandLookup]
-  );
-
-  const doctorChargeValue = useMemo(() => {
-    const parsed = Number.parseFloat(formState.doctorCharge);
-    return Number.isNaN(parsed) ? 0 : parsed;
-  }, [formState.doctorCharge]);
-
-  const surgeryChargeValue = useMemo(() => {
-    const parsed = Number.parseFloat(formState.surgeryCharge);
-    return Number.isNaN(parsed) ? 0 : parsed;
-  }, [formState.surgeryCharge]);
-
-  const serviceChargeValue = useMemo(() => {
-    const parsed = Number.parseFloat(formState.otherCharge);
-    return Number.isNaN(parsed) ? 0 : parsed;
-  }, [formState.otherCharge]);
-
-  const discountValue = useMemo(() => {
-    const parsed = Number.parseFloat(formState.discount);
-    return Number.isNaN(parsed) ? 0 : parsed;
-  }, [formState.discount]);
-
-  const totalChargeEstimate = useMemo(
-    () => {
-      const gross = doctorChargeValue + surgeryChargeValue + serviceChargeValue + medicinesTotal;
-      return Number(Math.max(gross - discountValue, 0).toFixed(2));
-    },
-    [doctorChargeValue, surgeryChargeValue, serviceChargeValue, medicinesTotal, discountValue]
-  );
-
   const handlePatientSelect = useCallback((patient) => {
     // clear validation errors when patient choice changes
     if (formError) setFormError('');
@@ -496,12 +548,10 @@ const AppointmentsPage = () => {
     if (!patient) {
       setFormState((prev) => ({ ...prev, patientId: '' }));
       setPatientSearchQuery('');
-      setProfileTab('owner');
       setShowPatientModal(false);
       setNewPatientForm(null);
       return;
     }
-    setProfileTab('owner');
     setFormState((prev) => ({ ...prev, patientId: String(patient.id) }));
     setPatientSearchQuery(patient.name || '');
     setNewPatientForm(null);
@@ -846,337 +896,6 @@ const AppointmentsPage = () => {
   }, []);
 
 
-  const fields = useMemo(() => {
-    const list = [
-      {
-        name: 'patientId',
-        render: () => (
-          <PatientSearch
-            query={patientSearchQuery}
-            onQueryChange={setPatientSearchQuery}
-            patients={patients}
-            onSelectPatient={handlePatientSelect}
-            onCreatePatient={handleQuickCreatePatient}
-            selectedPatient={selectedPatient}
-            renderCreateForm={renderQuickPatientForm}
-            inlineRight={(
-              <div className="flex flex-col gap-2">
-                <span className="text-sm font-medium text-slate-600">Appointment time</span>
-                {!dateEditing ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">
-                      {formState.date ? new Date(formState.date).toLocaleString() : 'Current time'}
-                    </span>
-                    <button
-                      type="button"
-                      className="btn btn-xs bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 hover:border-indigo-700"
-                      onClick={() => setDateEditing(true)}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 mr-1" aria-hidden="true">
-                        <path d="M5.433 13.917 13.25 6.1l.65.65-7.816 7.817a2.25 2.25 0 0 1-.95.57l-2.02.673a.75.75 0 0 1-.948-.948l.673-2.02a2.25 2.25 0 0 1 .57-.95Z" />
-                        <path d="M14.31 3.69a1.5 1.5 0 0 1 2.122 0l.878.878a1.5 1.5 0 0 1 0 2.121l-1.06 1.061-3-3 1.06-1.06Z" />
-                      </svg>
-                      Edit
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    <input
-                      type="datetime-local"
-                      value={typeof formState.date === 'string' ? formState.date : ''}
-                      onChange={(event) => handleChange('date', event.target.value)}
-                      className="input input-bordered bg-white w-full"
-                    />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-outline"
-                        onClick={() => handleChange('date', getCurrentDateTimeLocal())}
-                      >
-                        Use current time
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-xs btn-ghost"
-                        onClick={() => setDateEditing(false)}
-                      >
-                        Done
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          />
-        ),
-        fullWidth: true
-      }
-    ];
-
-
-    // Only show patient context when someone is selected
-    const patientSelected = Boolean(formState.patientId || selectedPatient);
-
-    if (patientSelected) {
-
-      const ageParts = [];
-      const years = Number.parseInt(selectedPatient?.ageYears, 10);
-      const months = Number.parseInt(selectedPatient?.ageMonths, 10);
-      if (!Number.isNaN(years) && years > 0) {
-        ageParts.push(`${years} yr${years > 1 ? 's' : ''}`);
-      }
-      if (!Number.isNaN(months) && months > 0) {
-        ageParts.push(`${months} mo${months > 1 ? 's' : ''}`);
-      }
-
-
-
-      if (startedTreatment) {
-        list.push(
-          {
-            name: 'reason',
-            label: 'Reason',
-            placeholder: 'Annual wellness exam',
-            // keep reason + note inline in one full-width section
-            fullWidth: true,
-            containerClass: 'md:col-start-1',
-            render: ({ label, value, onChange, placeholder: reasonPlaceholder, values }) => {
-              const currentValue = typeof value === 'string' ? value : '';
-              const normalizedValue = currentValue.toLowerCase();
-              const noteValue = typeof values?.notes === 'string' ? values.notes : '';
-
-              return (
-                <>
-                  <div className="grid gap-3 grid-cols-2">
-                    <div className="flex flex-col gap-2">
-                      <span className="text-sm font-medium text-slate-600">{label || 'Reason'}</span>
-                      <input
-                        type="text"
-                        value={currentValue}
-                        onChange={(event) => onChange(capitalizeFirstLetter(event.target.value))}
-                        placeholder={reasonPlaceholder}
-                        className="input input-bordered bg-white"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <span className="text-sm font-medium text-slate-600">Notes (DD)</span>
-                      <input
-                        type="text"
-                        value={noteValue}
-                        onChange={(event) => handleChange('notes', capitalizeFirstLetter(event.target.value))}
-                        placeholder="Reminder details, prep steps, etc."
-                        className="input input-bordered bg-white"
-                      />
-                    </div>
-                  </div>
-                  {reasonSuggestions.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {reasonSuggestions.map((suggestion) => {
-                        const isActive = suggestion.toLowerCase() === normalizedValue;
-                        return (
-                          <button
-                            type="button"
-                            key={suggestion}
-                            onClick={() => onChange(suggestion)}
-                            className={`btn btn-xs ${
-                              isActive
-                                ? 'btn-primary'
-                                : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
-                            }`}
-                          >
-                            {suggestion}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-     
-                </>
-              );
-            }
-          },
-          // vaccination plan UI removed
-          {
-            name: 'medicines',
-            render: ({ value, onChange }) => (
-              <AppointmentMedicineSelector
-                key={`medicines-reset-${formResetCounter}`}
-                value={value}
-                onChange={onChange}
-                brandOptions={brandOptions}
-                brandLookup={brandLookup}
-                loading={medicinesLoading}
-              />
-            ),
-            fullWidth: true
-          },
-          {
-            name: '__vaccineFollowUp',
-            render: () => (
-              <VaccineFollowUp
-                hasVaccineMedicine={hasVaccineMedicine}
-                vaccinationPlan={vaccinationPlan}
-                formState={formState}
-                updateVaccinationPlan={updateVaccinationPlan}
-                firstVaccineMedicineName={firstVaccineMedicineName}
-                vaccineNames={vaccineNames}
-              />
-            ),
-            fullWidth: true
-          },
-          {
-            name: '__chargesSummary',
-            render: () => (
-              <AppointmentChargesSummary
-                formState={formState}
-                setFormState={setFormState}
-                brandLookup={brandLookup}
-                chargePresets={chargePresetsApi.items}
-                surgeryChargePresets={surgeryChargePresetsApi.items}
-                paymentStatusOptions={paymentStatusOptions}
-              />
-            ),
-            fullWidth: true
-          }
-        );
-      }
-
-      // (status and charges moved inside startedTreatment branch)
-    } else {
-      // Show appointment components even if no patient is found
-      list.push(
-        {
-          name: 'reason',
-          label: 'Reason',
-          placeholder: 'Annual wellness exam',
-          fullWidth: true,
-          render: ({ label, value, onChange, placeholder: reasonPlaceholder, values }) => {
-            const currentValue = typeof value === 'string' ? value : '';
-            const normalizedValue = currentValue.toLowerCase();
-            const noteValue = typeof values?.notes === 'string' ? values.notes : '';
-            return (
-              <>
-                <div className="grid gap-3 grid-cols-2">
-                  <div className="flex flex-col gap-2">
-                    <span className="text-sm font-medium text-slate-600">{label || 'Reason'}</span>
-                    <input
-                      type="text"
-                      value={currentValue}
-                      onChange={(event) => onChange(capitalizeFirstLetter(event.target.value))}
-                      placeholder={reasonPlaceholder}
-                      className="input input-bordered bg-white"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <span className="text-sm font-medium text-slate-600">Notes (DD)</span>
-                    <input
-                      type="text"
-                      value={noteValue}
-                      onChange={(event) => handleChange('notes', capitalizeFirstLetter(event.target.value))}
-                      placeholder="Reminder details, prep steps, etc."
-                      className="input input-bordered bg-white"
-                    />
-                  </div>
-                </div>
-                {reasonSuggestions.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {reasonSuggestions.map((suggestion) => {
-                      const isActive = suggestion.toLowerCase() === normalizedValue;
-                      return (
-                        <button
-                          type="button"
-                          key={suggestion}
-                          onClick={() => onChange(suggestion)}
-                          className={`btn btn-xs ${
-                            isActive
-                              ? 'btn-primary'
-                              : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
-                          }`}
-                        >
-                          {suggestion}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
-            );
-          }
-        },
-
-
-        {
-          name: 'medicines',
-          render: ({ value, onChange }) => (
-            <AppointmentMedicineSelector
-              key={`medicines-reset-${formResetCounter}`}
-              value={value}
-              onChange={onChange}
-              brandOptions={brandOptions}
-              brandLookup={brandLookup}
-              loading={medicinesLoading}
-            />
-          ),
-          fullWidth: true
-        },
-        {
-          name: '__chargesSummary',
-          render: () => (
-            <AppointmentChargesSummary
-              formState={formState}
-              setFormState={setFormState}
-              brandLookup={brandLookup}
-              chargePresets={chargePresetsApi.items}
-              surgeryChargePresets={surgeryChargePresetsApi.items}
-              paymentStatusOptions={paymentStatusOptions}
-            />
-          ),
-          fullWidth: true
-        }
-      );
-    }
-
-    return list;
-  }, [
-    brandLookup,
-    brandOptions,
-    doctorChargeValue,
-    surgeryChargeValue,
-    discountValue,
-    chargePresetsApi.items,
-    surgeryChargePresetsApi.items,
-    formState.paymentStatus,
-    formState.paymentType,
-    handlePatientSelect,
-    lastPrescription,
-    medicinesLoading,
-    medicinesTotal,
-    patientSearchQuery,
-    patients,
-    items,
-    owners,
-    currencyFormatter,
-    reasonSuggestions,
-    selectedPatient,
-    selectedOwner,
-    profileTab,
-    startedTreatment,
-    totalChargeEstimate,
-    editingId,
-    patientReportsLoading,
-    patientReportsError,
-    formState.diagnosticReports,
-    handleReportInputChange,
-    handleReportRemove,
-    reportUploadState,
-    requestReportUpload,
-    registerReportInputRef,
-    vaccinationPlan,
-    isVaccineAppointment,
-    updateVaccinationPlan,
-    renderQuickPatientForm,
-    handleQuickCreatePatient
-  ]);
 
   const handleChange = (name, value) => {
     // clear any previous validation error when user edits fields
@@ -1240,35 +959,6 @@ const AppointmentsPage = () => {
     });
   };
 
-  const resetInvoiceSmsState = useCallback(() => {
-    setInvoiceSmsState({ sending: false, status: null, message: '' });
-  }, []);
-
-  const closeInvoiceModal = useCallback(() => {
-    setInvoiceModal({ open: false, data: null });
-    resetInvoiceSmsState();
-  }, [resetInvoiceSmsState]);
-
-  const handleSendInvoiceSms = useCallback(async () => {
-    const appointmentId = invoiceModal?.data?.appointmentId;
-    if (!appointmentId) {
-      setInvoiceSmsState({ sending: false, status: 'error', message: 'Missing appointment reference' });
-      return;
-    }
-
-    setInvoiceSmsState({ sending: true, status: null, message: '' });
-    try {
-      await sendAppointmentInvoiceSms(appointmentId);
-      setInvoiceSmsState({ sending: false, status: 'success', message: 'Invoice SMS sent to owner' });
-    } catch (error) {
-      setInvoiceSmsState({
-        sending: false,
-        status: 'error',
-        message: error?.message || 'Failed to send SMS'
-      });
-    }
-  }, [invoiceModal]);
-
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (isSaving) {
@@ -1278,8 +968,8 @@ const AppointmentsPage = () => {
     // clear previous form validation message
     if (formError) setFormError('');
 
-    // validate patient name when new registration is present
-    if (!formState.patientId && newPatientForm) {
+    // validate patient name when new registration is present (skip for walk-in)
+    if (!formState.isWalkIn && !formState.patientId && newPatientForm) {
       if (!newPatientForm.patientName || !newPatientForm.patientName.trim()) {
         setFormError('Patient name is required when registering a new patient.');
         return;
@@ -1439,26 +1129,35 @@ const AppointmentsPage = () => {
         const discount = Number.isNaN(parsedDiscount) ? 0 : parsedDiscount;
         const estimated = Number(Math.max(doctor + surgery + service + medicinesSubtotal - discount, 0).toFixed(2));
 
-        // if appointment completed, show success and invoice modal
+        // if appointment completed, navigate to receipt page
         if (payload.status === 'completed') {
           const appointmentId = result.data?.id ?? editingId ?? null;
           const respPatientName = result.data?.patient?.name;
-          resetInvoiceSmsState();
-          setSuccessMessage('Appointment completed');
-          setInvoiceModal({ open: true, data: {
-            doctorCharge: doctor,
-              surgeryCharge: surgery,
-            otherCharge: service,
-            otherChargeReason: payload.otherChargeReason || null,
-            medicinesSubtotal,
-            discount,
-            estimated,
-            patientName: respPatientName || selectedPatient?.name || (formState.patientId ? `Patient #${formState.patientId}` : ''),
-            appointmentId,
-            medicines: result.data?.medicines || []
-          } });
-          // auto-clear success message after a short while
-          setTimeout(() => setSuccessMessage(''), 4000);
+          resetForm();
+          await refreshPatients();
+          navigate('/appointments/receipt', {
+            state: {
+              from: 'appointments',
+              autoprint: true,
+              appointmentDate: formState.date,
+              invoice: {
+                doctorCharge: doctor,
+                surgeryCharge: surgery,
+                otherCharge: service,
+                otherChargeReason: payload.otherChargeReason || null,
+                medicinesSubtotal,
+                discount,
+                estimated,
+                patientName: respPatientName || selectedPatient?.name || formState.walkInName || (formState.isWalkIn ? 'Walk-in' : ''),
+                appointmentId,
+                medicines: result.data?.medicines || [],
+                paymentType: payload.paymentType || 'cash',
+                paymentStatus: payload.paymentStatus || 'paid',
+                reason: payload.reason || '',
+              }
+            }
+          });
+          return;
         } else {
           setSuccessMessage(editingId ? 'Appointment updated' : 'Appointment created');
           setTimeout(() => setSuccessMessage(''), 3000);
@@ -1478,7 +1177,6 @@ const AppointmentsPage = () => {
     setEditingId(appointment.id);
     setPatientSearchQuery(appointment.patient?.name || '');
     setDateEditing(false);
-    setProfileTab('owner');
     setReportUploadState({});
     reportFileInputsRef.current = {};
   }, [mapAppointmentToFormState]);
@@ -1490,6 +1188,8 @@ const AppointmentsPage = () => {
     // Explicitly clear form state with empty values
     setFormState({
       patientId: '',
+      isWalkIn: false,
+      walkInName: '',
       date: getCurrentDateTimeLocal(),
       reason: '',
       status: 'completed',
@@ -1508,7 +1208,6 @@ const AppointmentsPage = () => {
     });
     setPatientSearchQuery('');
     setDateEditing(false);
-    setProfileTab('owner');
     setReportUploadState({});
     reportFileInputsRef.current = {};
     setNewPatientForm(null);
@@ -1536,33 +1235,115 @@ const AppointmentsPage = () => {
   const patientRefreshRequested = useRef(false);
 
   const reasonAutofillRef = useRef('');
+  const reasonInputRef = useRef(null);
+  const medicineSelectorRef = useRef(null);
+
+  // Keyboard shortcuts — registered once; always reads latest state via this ref
+  const kbRef = useRef({});
+  kbRef.current = { reasonInputRef };
+
+  // Auto-focus patient search on mount
+  useEffect(() => {
+    const input = document.querySelector('[data-patient-search] input');
+    input?.focus();
+  }, []);
+
+  // Focus reason field when a patient is selected
+  const prevPatientIdRef = useRef('');
+  useEffect(() => {
+    const prev = prevPatientIdRef.current;
+    const curr = formState.patientId;
+    prevPatientIdRef.current = curr;
+    if (!prev && curr) {
+      setTimeout(() => reasonInputRef.current?.focus(), 80);
+    }
+  }, [formState.patientId]);
 
   useEffect(() => {
-    if (!normalizedReason) {
+    const handler = (e) => {
+
+      // F1 → focus patient search
+      if (e.key === 'F1') {
+        e.preventDefault();
+        const input = document.querySelector('[data-patient-search] input');
+        input?.focus();
+        input?.select();
+        return;
+      }
+
+      // F3 → focus reason field
+      if (e.key === 'F3') {
+        e.preventDefault();
+        kbRef.current.reasonInputRef?.current?.focus();
+        kbRef.current.reasonInputRef?.current?.select();
+        return;
+      }
+
+      // F5 → view patient profile (only when button is visible)
+      if (e.key === 'F5') {
+        const btn = document.querySelector('[data-view-profile]');
+        if (btn) {
+          e.preventDefault();
+          btn.click();
+        }
+        return;
+      }
+
+      // F4 → print passbook barcode
+      if (e.key === 'F4') {
+        e.preventDefault();
+        const printBtn = document.querySelector('[data-print-passbook]');
+        printBtn?.click();
+        return;
+      }
+
+      // F10 → submit (Complete Appointment + open invoice/print)
+      if (e.key === 'F10') {
+        e.preventDefault();
+        const submitBtn = document.querySelector('[data-appointments-form] button[type="submit"]');
+        submitBtn?.click();
+        return;
+      }
+
+    };
+
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []); // registered once — latest values read through kbRef
+
+  useEffect(() => {
+    // Skip auto-fill when editing existing appointments
+    if (editingId) {
       return;
     }
 
-    // Skip auto-fill when editing existing appointments
-    if (editingId) {
+    // Reason changed away from a previously auto-filled reason → clear auto-filled medicines
+    // so the new reason can trigger its own auto-fill on the next render
+    if (reasonAutofillRef.current && reasonAutofillRef.current !== normalizedReason) {
+      reasonAutofillRef.current = '';
+      setFormState((prev) => ({ ...prev, medicines: [] }));
+      return;
+    }
+
+    if (!normalizedReason) {
       return;
     }
 
     // Only auto-populate medicines if the table is currently empty
     const medicinesAreEmpty = !Array.isArray(formState.medicines) || formState.medicines.length === 0;
     if (!medicinesAreEmpty) {
-      // User has already selected medicines, don't override them
       return;
     }
 
     // Look up medicines for this reason from previous appointments
     const prescription = lastPrescription;
-    
+
     if (!prescription || !prescription.medicines.length) {
-      // No previous medicines found, keep table empty
       return;
     }
 
     // Populate medicines from previous appointment with this reason
+    reasonAutofillRef.current = normalizedReason;
     setFormState((prev) => ({
       ...prev,
       medicines: prescription.medicines.map((item) => ({ ...item }))
@@ -1633,6 +1414,16 @@ const AppointmentsPage = () => {
   ]);
 
   // Compute today's registered patients (last 5)
+  const patientHistory = useMemo(() => {
+    if (!selectedPatientId) return [];
+    return items
+      .filter((item) =>
+        String(item.patientId) === String(selectedPatientId) ||
+        String(item.patient?.id) === String(selectedPatientId)
+      )
+      .sort((a, b) => new Date(b.date).valueOf() - new Date(a.date).valueOf());
+  }, [items, selectedPatientId]);
+
   const todayRegisteredPatients = useMemo(() => {
     if (!Array.isArray(patients)) return [];
     const today = new Date();
@@ -1655,93 +1446,361 @@ const AppointmentsPage = () => {
     if (!patient) return;
     setFormState((prev) => ({ ...prev, patientId: String(patient.id) }));
     setPatientSearchQuery(patient.name || '');
-    setProfileTab('owner');
     setShowPatientModal(false);
     setNewPatientForm(null);
   };
 
   return (
-    <section className="space-y-2">
-      {successMessage && (
-        <div className="alert alert-success shadow-sm">
-          <span>{successMessage}</span>
-        </div>
-      )}
-      {formError && (
-        <div className="alert alert-error shadow-sm">
-          <span>{formError}</span>
-        </div>
-      )}
-      {combinedError && (
-        <div className="alert alert-error shadow-sm">
-          <span>{combinedError}</span>
-        </div>
-      )}
-      
+    <section className="flex flex-col gap-2 overflow-hidden" style={{ height: 'calc(100vh - 5rem)' }}>
 
-      {/* show submit button whenever the form has progressed past just the search
-          (typing in the search field or actually selecting a patient), or while editing */}
-      <div className="relative">
-        <div className="card bg-base-100 shadow border border-base-200 p-4 mb-6 relative">
-          {/* Absolutely positioned yellow box for today's patients inside card */}
-          {todayRegisteredPatients.length > 0 && (
-            <div className="absolute top-5 right-6 z-20 w-56">
-              <div className="bg-yellow-100 border border-yellow-300 rounded-lg shadow p-2">
-                <div className="text-xs font-bold text-yellow-800 mb-2 text-center">Today Registered</div>
-                <ul className="flex flex-col gap-1">
-                  {todayRegisteredPatients.map((patient) => (
-                    <li key={patient.id}>
-                      <button
-                        type="button"
-                        className="w-full text-left px-2 py-1 rounded bg-yellow-200 hover:bg-yellow-300 text-yellow-900 text-xs font-semibold truncate"
-                        title={patient.name}
-                        onClick={() => handleTodayPatientClick(patient)}
-                      >
-                        {patient.name}
-                        {patient.passbookNumber && (
-                          <span className="ml-2 text-[10px] text-yellow-700">#{patient.passbookNumber}</span>
-                        )}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+      {/* ── TOP STRIP: single unified bar ───────────────────── */}
+      <div className="shrink-0 space-y-1">
+
+        {/* One bar: title · today's patients · keyboard hints */}
+        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm">
+          {/* Title */}
+          <div className="flex shrink-0 items-center gap-1.5">
+            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm">
+              <CalendarDays size={12} />
             </div>
+            <span className="text-xs font-bold text-slate-700">Appointments</span>
+          </div>
+
+          <div className="h-3.5 w-px shrink-0 bg-slate-200" />
+
+          {/* Today's patients — scrollable middle strip */}
+          {todayRegisteredPatients.length > 0 ? (
+            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-hide">
+              <Users size={10} className="shrink-0 text-slate-400" />
+              <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-slate-400">Today</span>
+              <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[9px] font-bold text-blue-700">{todayRegisteredPatients.length}</span>
+              <div className="mx-1 h-3 w-px shrink-0 bg-slate-200" />
+              {todayRegisteredPatients.map((patient) => {
+                const active = String(formState.patientId) === String(patient.id);
+                return (
+                  <button
+                    key={patient.id}
+                    type="button"
+                    onClick={() => handleTodayPatientClick(patient)}
+                    className={`flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-left transition ${
+                      active ? 'border-blue-400 bg-blue-600 text-white' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-blue-300 hover:bg-blue-50'
+                    }`}
+                  >
+                    <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${active ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-600'}`}>
+                      {patient.name.charAt(0).toUpperCase()}
+                    </span>
+                    <span className={`whitespace-nowrap text-[11px] font-semibold ${active ? 'text-white' : ''}`}>{patient.name}</span>
+                    {patient.passbookNumber && <span className={`text-[10px] ${active ? 'text-blue-100' : 'text-slate-400'}`}>#{patient.passbookNumber}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex-1" />
           )}
-          <EntityForm
-            fields={fields}
-            values={formState}
-            onChange={handleChange}
-            onSubmit={handleSubmit}
-            preventSubmitOnEnter={true}
-            submitLabel={editingId ? 'Update treatment' : 'Complete Appointment'}
-            isEditing={Boolean(editingId)}
-            onCancel={resetForm}
-            showSubmit={true}
-            submitLoading={isSaving}
-          />
+
+          {/* Keyboard hints */}
+          <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
+            {[['F1','Patient'],['F3','Reason'],['F4','Barcode'],['F5','Profile'],['F10','Complete']].map(([key, hint]) => (
+              <span key={key} className="flex items-center gap-1">
+                <kbd className="rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 font-mono text-[9px] font-bold text-slate-500 shadow-sm">{key}</kbd>
+                <span className="text-[9px] text-slate-400">{hint}</span>
+              </span>
+            ))}
+          </div>
         </div>
+
+        {/* Banners — only visible when triggered */}
+        {successMessage && (
+          <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">
+            <CheckCircle2 size={13} className="shrink-0" /><span>{successMessage}</span>
+          </div>
+        )}
+        {formError && (
+          <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs text-rose-700">
+            <AlertTriangle size={13} className="shrink-0" /><span>{formError}</span>
+          </div>
+        )}
+        {combinedError && (
+          <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs text-rose-700">
+            <AlertTriangle size={13} className="shrink-0" /><span>{combinedError}</span>
+          </div>
+        )}
       </div>
-      {/* veterinarian removed from form */}
 
-      <InvoicePrintModal
-        open={invoiceModal.open}
-        invoice={invoiceModal.data}
-        onClose={closeInvoiceModal}
-        onSendSms={invoiceModal.data?.appointmentId ? handleSendInvoiceSms : null}
-        smsSending={invoiceSmsState.sending}
-        smsStatus={invoiceSmsState.status}
-        smsMessage={invoiceSmsState.message}
-        currencyFormatter={currencyFormatter}
-      />
+      {/* ── MAIN AREA: form wraps both columns ───────────────── */}
+      <form
+        className="flex min-h-0 flex-1 gap-3"
+        onSubmit={handleSubmit}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter') return;
+          const tag = e.target?.tagName;
+          if (tag === 'TEXTAREA' || tag === 'BUTTON' || e.target?.type === 'submit') return;
+          e.preventDefault();
+        }}
+        data-appointments-form
+      >
+        {/* ── LEFT COLUMN: clinical workflow ────────────────── */}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-      {/* patient info modal */}
+          {/* Card header */}
+          <div className="shrink-0 flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-blue-50 to-slate-50 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <Clock3 size={14} className="text-blue-500" />
+              <span className="text-sm font-bold text-slate-700">{editingId ? 'Edit Treatment' : 'New Treatment'}</span>
+              {editingId && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Editing</span>}
+            </div>
+            {startedTreatment && (
+              <div className="flex items-center gap-2">
+                {formState.isWalkIn ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    {formState.walkInName || 'Walk-in'}
+                  </span>
+                ) : selectedPatient ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    {selectedPatient.name}
+                  </span>
+                ) : null}
+                {selectedPatient && !formState.isWalkIn && (
+                  <button
+                    type="button"
+                    data-view-profile
+                    onClick={() => setShowPatientModal(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                    title="View patient profile (F5)"
+                  >
+                    <Eye size={12} /> Profile
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Scrollable sections */}
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+
+            {/* ── SECTION 1: PATIENT ── */}
+            <div className="p-2">
+              <div className="mb-1 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Users size={12} className="text-blue-500" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Patient</span>
+                  </div>
+                  {!formState.isWalkIn && (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 hover:bg-amber-100 transition"
+                      onClick={() => {
+                        setFormState((prev) => ({ ...prev, isWalkIn: true, patientId: '' }));
+                        setPatientSearchQuery('');
+                        setNewPatientForm(null);
+                      }}
+                    >
+                      Walk-in patient
+                    </button>
+                  )}
+                </div>
+                {/* Appointment time — compact inline */}
+                <div className="flex items-center gap-2">
+                  {!dateEditing ? (
+                    <button
+                      type="button"
+                      onClick={() => setDateEditing(true)}
+                      className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50 transition"
+                    >
+                      <Clock3 size={11} className="text-slate-400" />
+                      {formState.date
+                        ? new Date(formState.date).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                        : 'Set time'}
+                      <Pencil size={9} className="text-slate-400" />
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="datetime-local"
+                        value={typeof formState.date === 'string' ? formState.date : ''}
+                        onChange={(e) => handleChange('date', e.target.value)}
+                        className="input input-xs input-bordered bg-white text-xs"
+                      />
+                      <button type="button" onClick={() => handleChange('date', getCurrentDateTimeLocal())} className="text-[11px] font-medium text-blue-600 hover:underline">Now</button>
+                      <button type="button" onClick={() => setDateEditing(false)} className="text-[11px] text-slate-500 hover:underline">Done</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {formState.isWalkIn ? (
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Walk-in
+                  </span>
+                  <input
+                    type="text"
+                    value={formState.walkInName || ''}
+                    onChange={(e) => handleChange('walkInName', e.target.value)}
+                    placeholder="Patient name (optional)"
+                    className="input input-xs input-bordered min-w-0 flex-1 bg-white placeholder:text-slate-400 focus:border-amber-400 focus:ring-1 focus:ring-amber-100 focus:outline-none"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormState((prev) => ({ ...prev, isWalkIn: false, walkInName: '' }));
+                      setTimeout(() => document.querySelector('[data-patient-search] input')?.focus(), 50);
+                    }}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-xs font-medium text-slate-500 hover:bg-slate-50 transition"
+                  >
+                    <X size={11} /> Cancel
+                  </button>
+                </div>
+              ) : (
+                <div data-patient-search>
+                  <PatientSearch
+                    query={patientSearchQuery}
+                    onQueryChange={setPatientSearchQuery}
+                    patients={patients}
+                    onSelectPatient={handlePatientSelect}
+                    onCreatePatient={handleQuickCreatePatient}
+                    selectedPatient={selectedPatient}
+                    renderCreateForm={renderQuickPatientForm}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* ── SECTION 2: CLINICAL DETAILS ── */}
+            <div className="p-2">
+              <div className="mb-1 flex items-center gap-1.5">
+                <ClipboardList size={12} className="text-emerald-500" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Clinical Details</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <ReasonInput
+                  inputRef={reasonInputRef}
+                  value={typeof formState.reason === 'string' ? formState.reason : ''}
+                  onChange={(v) => handleChange('reason', capitalizeFirstLetter(v))}
+                  placeholder="Reason for visit"
+                  suggestions={reasonSuggestions}
+                  onEnterNoDropdown={() => {
+                    if (formState.medicines?.length > 0) medicineSelectorRef.current?.focusFirst();
+                  }}
+                />
+                <input
+                  type="text"
+                  value={typeof formState.notes === 'string' ? formState.notes : ''}
+                  onChange={(e) => handleChange('notes', capitalizeFirstLetter(e.target.value))}
+                  placeholder="Notes / prep steps…"
+                  className="input input-sm input-bordered w-full bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100"
+                />
+              </div>
+              {reasonSuggestions.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {reasonSuggestions.map((s) => {
+                    const isActive = s.toLowerCase() === (formState.reason || '').toLowerCase();
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => handleChange('reason', s)}
+                        className={`rounded-lg border px-2 py-0.5 text-xs font-semibold transition ${
+                          isActive
+                            ? 'border-blue-400 bg-blue-50 text-blue-700 shadow-sm'
+                            : 'border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100'
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ── SECTION 3: PRESCRIPTION ── */}
+            <div className="p-2">
+              <div className="mb-1 flex items-center gap-1.5">
+                <Pill size={12} className="text-violet-500" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Prescription</span>
+              </div>
+              <AppointmentMedicineSelector
+                ref={medicineSelectorRef}
+                key={`medicines-reset-${formResetCounter}`}
+                value={formState.medicines || []}
+                onChange={(newValue) => {
+                  handleChange('medicines', newValue);
+                  if ((!newValue || newValue.length === 0) && formState.reason) {
+                    reasonAutofillRef.current = '';
+                    setFormState((prev) => ({ ...prev, reason: '' }));
+                    setTimeout(() => reasonInputRef.current?.focus(), 50);
+                  }
+                }}
+                brandOptions={brandOptions}
+                brandLookup={brandLookup}
+                loading={medicinesLoading}
+              />
+            </div>
+
+            {/* ── SECTION 4: VACCINE FOLLOW-UP (conditional) ── */}
+            {hasVaccineMedicine && (
+              <div className="p-2">
+                <VaccineFollowUp
+                  hasVaccineMedicine={hasVaccineMedicine}
+                  vaccinationPlan={vaccinationPlan}
+                  formState={formState}
+                  updateVaccinationPlan={updateVaccinationPlan}
+                  firstVaccineMedicineName={firstVaccineMedicineName}
+                  vaccineNames={vaccineNames}
+                />
+              </div>
+            )}
+
+          </div>
+        </div>
+
+        {/* ── RIGHT COLUMN: charges + submit ────────────────── */}
+        <div className="flex w-[480px] shrink-0 flex-col gap-2">
+
+          {/* Charges panel */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <AppointmentChargesSummary
+              formState={formState}
+              setFormState={setFormState}
+              brandLookup={brandLookup}
+              chargePresets={chargePresetsApi.items}
+              surgeryChargePresets={surgeryChargePresetsApi.items}
+              paymentStatusOptions={paymentStatusOptions}
+            />
+          </div>
+
+          {/* Submit panel — always visible */}
+          <div className="shrink-0 rounded-2xl border border-slate-200 bg-white px-2.5 py-2 shadow-sm">
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="btn btn-primary btn-sm w-full shadow-sm"
+              >
+                {isSaving ? 'Saving…' : editingId ? 'Update Treatment' : 'Complete Appointment ✓'}
+              </button>
+              {editingId && (
+                <button type="button" onClick={resetForm} className="btn btn-outline btn-sm w-full text-slate-600">
+                  Cancel Edit
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </form>
+
       <PatientInfoModal
         open={showPatientModal}
         onClose={() => setShowPatientModal(false)}
         selectedPatient={selectedPatient}
         selectedOwner={selectedOwner}
-        history={history}
+        history={patientHistory}
         currencyFormatter={currencyFormatter}
         startedTreatment={startedTreatment}
         diagnosticReports={formState.diagnosticReports}

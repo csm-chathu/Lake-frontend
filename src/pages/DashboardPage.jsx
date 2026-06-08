@@ -1,18 +1,14 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   ResponsiveContainer,
-  AreaChart,
-  Area,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ReferenceLine,
   PieChart,
   Pie,
-  Legend
+  Legend,
+  Tooltip
 } from 'recharts';
 import StatCard from '../components/StatCard.jsx';
 import useEntityApi from '../hooks/useEntityApi.js';
@@ -83,6 +79,74 @@ const DashboardPage = () => {
 
   const totalPatients = patients.length;
   const totalOwners = owners.length;
+
+  // Calendar state
+  const [calendarDate, setCalendarDate] = useState(() => new Date());
+  const [selectedDay, setSelectedDay] = useState(() => new Date());
+  const [calendarNotes, setCalendarNotes] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('vetfinal_cal_notes') || '{}'); }
+    catch { return {}; }
+  });
+  const [popover, setPopover] = useState(null); // { key, date, rect }
+  const [noteInput, setNoteInput] = useState('');
+
+  const NOTE_COLORS = [
+    { bg: '#fef08a', border: '#eab308', shadow: '#ca8a04', text: '#713f12' },
+    { bg: '#fbcfe8', border: '#ec4899', shadow: '#db2777', text: '#831843' },
+    { bg: '#bbf7d0', border: '#22c55e', shadow: '#16a34a', text: '#14532d' },
+    { bg: '#bfdbfe', border: '#3b82f6', shadow: '#2563eb', text: '#1e3a8a' },
+    { bg: '#e9d5ff', border: '#a855f7', shadow: '#9333ea', text: '#581c87' },
+    { bg: '#fed7aa', border: '#f97316', shadow: '#ea580c', text: '#7c2d12' },
+  ];
+
+  const calNoteKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+
+  const saveNotes = (next) => {
+    setCalendarNotes(next);
+    localStorage.setItem('vetfinal_cal_notes', JSON.stringify(next));
+  };
+
+  const addNote = (key) => {
+    const text = noteInput.trim();
+    if (!text) return;
+    const existing = calendarNotes[key] || [];
+    const colorIdx = existing.length % NOTE_COLORS.length;
+    saveNotes({ ...calendarNotes, [key]: [...existing, { id: `${Date.now()}`, text, colorIdx }] });
+    setNoteInput('');
+  };
+
+  const deleteNote = (key, noteId) => {
+    const filtered = (calendarNotes[key] || []).filter((n) => n.id !== noteId);
+    const next = { ...calendarNotes };
+    if (filtered.length) next[key] = filtered; else delete next[key];
+    saveNotes(next);
+  };
+
+  const openPopover = (e, key, date) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setPopover({ key, date, rect });
+    setNoteInput('');
+    setSelectedDay(date);
+  };
+
+  const appointmentsByDay = useMemo(() => {
+    const map = new Map();
+    appointments.forEach((appt) => {
+      const d = new Date(appt.date);
+      if (Number.isNaN(d.valueOf())) return;
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(appt);
+    });
+    return map;
+  }, [appointments]);
+
+  const selectedDayAppts = useMemo(() => {
+    const key = `${selectedDay.getFullYear()}-${selectedDay.getMonth()}-${selectedDay.getDate()}`;
+    const list = appointmentsByDay.get(key) || [];
+    return [...list].sort((a, b) => new Date(a.date) - new Date(b.date));
+  }, [appointmentsByDay, selectedDay]);
 
   // compute gender distribution for doughnut chart
   const genderStats = useMemo(() => {
@@ -309,7 +373,7 @@ const DashboardPage = () => {
     ]);
 
     return getPosNavItems(user?.user_type)
-      .filter((item) => item.to !== '/')
+      .filter((item) => item.to && item.to !== '/')
       .slice()
       .sort((a, b) => {
         const rankA = preferredOrder.get(a.to) ?? Number.MAX_SAFE_INTEGER;
@@ -387,18 +451,67 @@ const DashboardPage = () => {
           <h1 className="text-3xl font-semibold text-slate-800">Clinic overview</h1>
           <p className="text-sm text-slate-500">Stay ahead of today&apos;s caseload and upcoming visits.</p>
         </div>
-        {/* <div className="flex flex-wrap items-center gap-2">
-          <Link to="/appointments" className="btn btn-primary btn-sm h-10 px-5">
-            🗓️ Start Treatment
-          </Link>
-          <Link to="/sales" className="btn btn-outline btn-sm h-10 px-5">
-            🧾 POS
-          </Link>
-        </div> */}
+        {canStartTreatment && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Link to="/appointments" className="btn btn-primary btn-sm h-10 px-5 shadow-sm">
+              + New Appointment
+            </Link>
+            <Link to="/sales" className="btn btn-outline btn-sm h-10 px-5">
+              🧾 POS Sale
+            </Link>
+          </div>
+        )}
       </div>
       {loading ? (
-        <div className="rounded-2xl border border-base-300 bg-base-100 p-6 text-center text-slate-500 shadow-sm">
-          Loading data…
+        <div className="space-y-6 animate-pulse">
+          {/* Stat cards */}
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="h-3 w-28 rounded-full bg-slate-100" />
+                  <div className="h-9 w-9 rounded-xl bg-slate-100" />
+                </div>
+                <div className="h-8 w-16 rounded-lg bg-slate-100" />
+              </div>
+            ))}
+          </div>
+          {/* Main grid */}
+          <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
+            {/* Left column */}
+            <div className="flex flex-col gap-4">
+              {/* Chart card */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="mb-5 flex items-center justify-between">
+                  <div className="space-y-2">
+                    <div className="h-4 w-44 rounded-full bg-slate-100" />
+                    <div className="h-3 w-32 rounded-full bg-slate-100" />
+                  </div>
+                  <div className="h-14 w-20 rounded-xl bg-slate-100" />
+                </div>
+                <div className="h-72 rounded-xl bg-slate-100" />
+              </div>
+              {/* Today's visits card */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="mb-4 space-y-2">
+                  <div className="h-4 w-36 rounded-full bg-slate-100" />
+                  <div className="h-3 w-52 rounded-full bg-slate-100" />
+                </div>
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="h-16 rounded-xl bg-slate-100" />
+                  ))}
+                </div>
+              </div>
+            </div>
+            {/* Right column */}
+            <div className="flex flex-col gap-4">
+              <div className="h-64 rounded-2xl bg-slate-100" />
+              <div className="h-28 rounded-2xl bg-slate-100" />
+              <div className="h-52 rounded-2xl bg-slate-100" />
+              <div className="h-44 rounded-2xl bg-slate-100" />
+            </div>
+          </div>
         </div>
       ) : (
         <>
@@ -407,114 +520,204 @@ const DashboardPage = () => {
               title="Registered Patients"
               value={totalPatients}
               icon="🐾"
-              color="emerald"
+              color="blue"
             />
             <StatCard
               title="Active Owners"
               value={totalOwners}
               icon="👤"
-              color="sky"
+              color="emerald"
             />
             <StatCard
               title="SMS Sent"
               value={smsCount}
               icon="✉️"
-              color="amber"
+              color="violet"
             />
             <div className="flex flex-col gap-1">
               <StatCard
-                  title="Expiring Soon"
+                title="Expiring Soon"
                 value={expiringSoonCount}
                 icon="⏳"
                 color="rose"
-                  onClick={handleExpiringTileClick}
+                onClick={handleExpiringTileClick}
               />
-                <p className="px-1 text-[11px] font-medium text-rose-700">Click to view full list</p>
+              <p className="px-1 text-[11px] font-medium text-rose-600">Click to view full list</p>
             </div>
           </section>
           <section className="grid gap-4 lg:grid-cols-[2fr,1fr]">
             <div className="flex flex-col gap-4">
-              <div className="rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm">
-                <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="rounded-2xl border border-base-300 bg-white p-6 shadow-sm">
+                <div className="mb-5 flex items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-lg font-semibold text-slate-800">Weekly flow</h2>
-                    <p className="text-xs text-slate-500">Appointment volume over the last seven days.</p>
+                    <h2 className="text-base font-semibold text-slate-800">Appointment Calendar</h2>
+                    <p className="text-xs text-slate-400">Click a day to view scheduled visits</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-400">Total week</p>
-                    <p className="text-lg font-semibold text-slate-800">{last7DaysTotal}</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCalendarDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition"
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <span className="text-sm font-semibold text-slate-700 min-w-[110px] text-center">
+                      {calendarDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCalendarDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition"
+                    >
+                      <ChevronRight size={14} />
+                    </button>
                   </div>
                 </div>
-                {chartData.length > 0 ? (
-                  <div className="w-full space-y-3">
-                    <div style={{ height: 360 }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={chartData} margin={{ top: 10, right: 12, left: -8, bottom: 0 }}>
-                          <defs>
-                            <linearGradient id="appointmentsArea" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#e11d48" stopOpacity={0.3} />
-                              <stop offset="100%" stopColor="#e11d48" stopOpacity={0.04} />
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="4 4" stroke="#e2e8f0" vertical={false} />
-                          <XAxis
-                            dataKey="label"
-                            tickLine={false}
-                            axisLine={false}
-                            tick={{ fill: '#64748b', fontSize: 12 }}
-                          />
-                          <YAxis
-                            allowDecimals={false}
-                            tickLine={false}
-                            axisLine={false}
-                            tick={{ fill: '#64748b', fontSize: 12 }}
-                            width={28}
-                          />
-                          <Tooltip
-                            cursor={{ stroke: '#cbd5e1', strokeDasharray: '4 4' }}
-                            contentStyle={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                            labelStyle={{ color: '#0f172a', fontWeight: 600 }}
-                            formatter={(value) => [`${value} visit${value === 1 ? '' : 's'}`, 'Appointments']}
-                          />
-                          <ReferenceLine
-                            y={weeklyAvg}
-                            stroke="#64748b"
-                            strokeDasharray="4 4"
-                            label={{ value: 'Avg', position: 'top', fill: '#64748b', fontSize: 12 }}
-                          />
-                          <Area
-                            type="monotone"
-                            dataKey="count"
-                            stroke="#e11d48"
-                            strokeWidth={2.5}
-                            fill="url(#appointmentsArea)"
-                            activeDot={{ r: 5, fill: '#e11d48', stroke: 'white', strokeWidth: 2 }}
-                          />
-                        </AreaChart>
-                      </ResponsiveContainer>
+                {(() => {
+                  const year = calendarDate.getFullYear();
+                  const month = calendarDate.getMonth();
+                  const firstDay = new Date(year, month, 1).getDay();
+                  const daysInMonth = new Date(year, month + 1, 0).getDate();
+                  const todayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+                  const selectedKey = `${selectedDay.getFullYear()}-${selectedDay.getMonth()}-${selectedDay.getDate()}`;
+                  const blanks = Array(firstDay).fill(null);
+                  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+                  return (
+                    <div>
+                      {/* Day headers */}
+                      <div className="grid grid-cols-7 mb-1 border-b border-slate-100 pb-1">
+                        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d) => (
+                          <div key={d} className="py-1 text-center text-[10px] font-bold uppercase tracking-wide text-slate-400">{d}</div>
+                        ))}
+                      </div>
+                      {/* Day cells */}
+                      <div className="grid grid-cols-7 gap-px bg-slate-100 border border-slate-100 rounded-xl overflow-hidden">
+                        {blanks.map((_, i) => (
+                          <div key={`b${i}`} className="bg-slate-50 min-h-[80px]" />
+                        ))}
+                        {days.map((day) => {
+                          const key = `${year}-${month}-${day}`;
+                          const appts = appointmentsByDay.get(key) || [];
+                          const notes = calendarNotes[key] || [];
+                          const isToday = key === todayKey;
+                          const isSelected = key === selectedKey;
+                          return (
+                            <button
+                              key={day}
+                              type="button"
+                              onClick={(e) => openPopover(e, key, new Date(year, month, day))}
+                              className={`relative flex flex-col gap-1 p-1.5 text-left min-h-[80px] transition-colors
+                                ${isSelected ? 'bg-blue-50 ring-2 ring-inset ring-blue-400' : isToday ? 'bg-blue-50/60' : 'bg-white hover:bg-slate-50'}`}
+                            >
+                              <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold self-end
+                                ${isToday ? 'bg-blue-600 text-white' : isSelected ? 'text-blue-700' : 'text-slate-600'}`}>
+                                {day}
+                              </span>
+                              {appts.length > 0 && (
+                                <span className="self-start rounded-md bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700 leading-none">
+                                  🗓 {appts.length} visit{appts.length > 1 ? 's' : ''}
+                                </span>
+                              )}
+                              {notes.slice(0, 2).map((note) => {
+                                const c = NOTE_COLORS[note.colorIdx ?? 0];
+                                return (
+                                  <span
+                                    key={note.id}
+                                    className="block w-full rounded-sm px-1.5 py-0.5 text-[9px] font-medium leading-tight truncate"
+                                    style={{ background: c.bg, color: c.text, boxShadow: `1px 1px 0 ${c.shadow}` }}
+                                  >
+                                    {note.text}
+                                  </span>
+                                );
+                              })}
+                              {notes.length > 2 && (
+                                <span className="text-[9px] text-slate-400 font-medium">+{notes.length - 2} more</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-7 text-center text-xs font-medium text-slate-500">
-                      {last7DaysStats.map((stat) => (
-                        <div key={stat.dateLabel} className="flex flex-col gap-1">
-                          <span>{stat.label}</span>
-                          <span className="text-[11px] text-slate-400">{stat.count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-base-300 bg-base-200/40 p-6 text-sm text-slate-500">
-                    Not enough appointment history to plot yet.
-                  </div>
-                )}
+                  );
+                })()}
               </div>
 
-              <div className="rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm">
+              {/* ── Popover portal ── */}
+              {popover && createPortal(
+                <>
+                  <div className="fixed inset-0 z-[300]" onClick={() => setPopover(null)} />
+                  <div
+                    className="fixed z-[310] w-72 rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden"
+                    style={{
+                      top: Math.min(popover.rect.bottom + 6, window.innerHeight - 320),
+                      left: Math.min(Math.max(popover.rect.left, 8), window.innerWidth - 296),
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* Popover header */}
+                    <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
+                      <span className="text-sm font-semibold text-slate-800">
+                        📝 {popover.date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                      </span>
+                      <button type="button" onClick={() => setPopover(null)} className="text-slate-400 hover:text-slate-600 text-lg leading-none">×</button>
+                    </div>
+
+                    {/* Existing notes */}
+                    <div className="p-3 space-y-2 max-h-48 overflow-y-auto">
+                      {(calendarNotes[popover.key] || []).length === 0 ? (
+                        <p className="text-xs text-slate-400 text-center py-3">No notes yet. Add one below.</p>
+                      ) : (
+                        (calendarNotes[popover.key] || []).map((note) => {
+                          const c = NOTE_COLORS[note.colorIdx ?? 0];
+                          return (
+                            <div
+                              key={note.id}
+                              className="relative rounded-xl px-3 py-2.5 pr-7 text-xs font-medium leading-relaxed"
+                              style={{ background: c.bg, color: c.text, boxShadow: `2px 2px 0 ${c.shadow}` }}
+                            >
+                              {note.text}
+                              <button
+                                type="button"
+                                onClick={() => deleteNote(popover.key, note.id)}
+                                className="absolute right-2 top-2 text-xs font-bold opacity-50 hover:opacity-100 transition"
+                                style={{ color: c.text }}
+                              >×</button>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {/* Add input */}
+                    <div className="border-t border-slate-100 p-3 flex gap-2">
+                      <input
+                        type="text"
+                        className="input input-bordered input-sm flex-1 text-sm"
+                        placeholder="Add a note…"
+                        value={noteInput}
+                        onChange={(e) => setNoteInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addNote(popover.key); } }}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary rounded-xl px-3"
+                        onClick={() => addNote(popover.key)}
+                      >Add</button>
+                    </div>
+                  </div>
+                </>,
+                document.body
+              )}
+
+              <div className="rounded-2xl border border-base-300 bg-white p-6 shadow-sm">
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-lg font-semibold text-slate-800">Today&apos;s visits</h2>
+                    <h2 className="text-lg font-semibold text-slate-800">
+                      {selectedDay.toDateString() === now.toDateString() ? "Today's visits" : selectedDay.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                    </h2>
                     <p className="text-xs text-slate-500">
-                      {todaysAppointments.length} appointment{todaysAppointments.length === 1 ? '' : 's'} scheduled for today.
+                      {selectedDayAppts.length} appointment{selectedDayAppts.length === 1 ? '' : 's'} scheduled.
                     </p>
                   </div>
                   {canStartTreatment && (
@@ -523,13 +726,13 @@ const DashboardPage = () => {
                     </Link>
                   )}
                 </div>
-                {todaysAppointments.length === 0 ? (
+                {selectedDayAppts.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-base-300 bg-base-200/40 p-6 text-sm text-slate-500">
-                    No visits booked for today.
+                    No visits scheduled for this day.
                   </div>
                 ) : (
                   <ul className="space-y-3">
-                    {todaysAppointments.slice(0, 6).map((appointment) => {
+                    {selectedDayAppts.slice(0, 6).map((appointment) => {
                       const appointmentDate = new Date(appointment.date);
                       const timeString = appointmentDate.toLocaleTimeString([], {
                         hour: '2-digit',
@@ -580,7 +783,7 @@ const DashboardPage = () => {
                     })}
                   </ul>
                 )}
-                {todaysAppointments.length > 6 && (
+                {selectedDayAppts.length > 6 && (
                   <div className="mt-4 text-right text-xs text-primary">
                     Showing first 6 visits. View all in the schedule.
                   </div>
@@ -612,7 +815,7 @@ const DashboardPage = () => {
                 </div>
               </div>
             </div>
-            <div className="rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm text-sm text-slate-600">
+            <div className="rounded-2xl border border-base-300 bg-white p-6 shadow-sm text-sm text-slate-600">
                 <h3 className="text-base font-semibold text-slate-800">Quick shortcuts</h3>
                 <ul className="mt-3 space-y-2 text-xs text-slate-500">
                   <li>

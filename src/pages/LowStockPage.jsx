@@ -124,8 +124,14 @@ const LowStockPage = () => {
       )}
 
       {loading ? (
-        <div className="rounded-2xl border border-base-300 bg-base-100 p-6 text-center text-slate-500 shadow-sm">
-          Loading stock alerts…
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm animate-pulse space-y-3">
+          <div className="flex items-center justify-between mb-4">
+            <div className="h-4 w-44 rounded-full bg-slate-100" />
+            <div className="h-6 w-10 rounded-full bg-slate-100" />
+          </div>
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-14 rounded-xl bg-slate-100" />
+          ))}
         </div>
       ) : (
         <div className="rounded-2xl border border-rose-300 bg-rose-50 p-6 shadow-sm text-sm text-rose-900">

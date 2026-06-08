@@ -6,23 +6,19 @@ const plainNumberFormatter = new Intl.NumberFormat('en-LK', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2
 });
-const defaultOverlayStyle = { left: 0, top: 0, width: 0 };
+const defaultOverlayStyle = { left: 0, top: 0, width: 0, openUpward: false };
 
 const DropdownPortal = ({ children, style }) => {
-  if (typeof document === 'undefined') {
-    return null;
-  }
+  if (typeof document === 'undefined') return null;
+
+  const posStyle = style.openUpward
+    ? { position: 'fixed', left: style.left, bottom: style.bottom, minWidth: style.width, width: style.width }
+    : { position: 'fixed', left: style.left, top: style.top, minWidth: style.width, width: style.width };
 
   return createPortal(
     <ul
       className="z-50 max-h-60 overflow-y-auto rounded-xl border border-base-300 bg-base-100 shadow-xl"
-      style={{
-        position: 'absolute',
-        left: style.left,
-        top: style.top,
-        minWidth: style.width,
-        width: style.width
-      }}
+      style={posStyle}
     >
       {children}
     </ul>,
@@ -49,7 +45,7 @@ export const calculateMedicinesTotal = (rows = [], brandLookup = new Map()) => {
   return Number(total.toFixed(2));
 };
 
-const AppointmentMedicineSelector = ({
+const AppointmentMedicineSelector = React.forwardRef(function AppointmentMedicineSelector({
   value,
   onChange,
   brandOptions,
@@ -60,28 +56,37 @@ const AppointmentMedicineSelector = ({
   lockBrandSelection = false,
   quantityStep = '0.1',
   quantityMin = '0'
-}) => {
+}, ref) {
   const rows = Array.isArray(value) ? value : [];
   const hasBrandOptions = brandOptions.length > 0;
   const [activeIndex, setActiveIndex] = React.useState(null);
+  const [highlightedOptionIndex, setHighlightedOptionIndex] = React.useState(-1);
   const [overlayStyle, setOverlayStyle] = React.useState(defaultOverlayStyle);
   const blurTimeoutRef = React.useRef(null);
   const inputRefs = React.useRef([]);
 
+  React.useImperativeHandle(ref, () => ({
+    focusFirst: () => {
+      const el = inputRefs.current[0];
+      if (el) { el.focus(); el.select(); }
+    }
+  }));
+
   const updateOverlay = React.useCallback(
     (index) => {
-      if (typeof window === 'undefined') {
-        return;
-      }
+      if (typeof window === 'undefined') return;
       const element = inputRefs.current[index];
-      if (!element) {
-        return;
-      }
+      if (!element) return;
       const rect = element.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const openUpward = spaceBelow < 240 && spaceAbove > spaceBelow;
       setOverlayStyle({
-        left: rect.left + window.scrollX,
-        top: rect.bottom + window.scrollY + 4,
-        width: rect.width
+        left: rect.left,
+        top: openUpward ? undefined : rect.bottom + 4,
+        bottom: openUpward ? (window.innerHeight - rect.top + 4) : undefined,
+        width: rect.width,
+        openUpward
       });
     },
     []
@@ -166,6 +171,7 @@ const AppointmentMedicineSelector = ({
       clearTimeout(blurTimeoutRef.current);
     }
     setActiveIndex(index);
+    setHighlightedOptionIndex(-1);
     updateOverlay(index);
   };
 
@@ -287,30 +293,44 @@ const AppointmentMedicineSelector = ({
   };
 
   const handleInputKeyDown = (event, rowIndex, row) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setHighlightedOptionIndex((prev) => Math.min(prev + 1, row.filteredOptions.length - 1));
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setHighlightedOptionIndex((prev) => Math.max(prev - 1, 0));
+      return;
+    }
+    if (event.key === 'Escape') {
+      setActiveIndex(null);
+      setHighlightedOptionIndex(-1);
+      setOverlayStyle(defaultOverlayStyle);
+      return;
+    }
     if (event.key !== 'Enter') {
       return;
     }
 
-    const [firstOption] = row.filteredOptions;
-    if (!firstOption) {
-      return;
-    }
+    const option = highlightedOptionIndex >= 0
+      ? row.filteredOptions[highlightedOptionIndex]
+      : row.filteredOptions[0];
+    if (!option) return;
 
     event.preventDefault();
-    handleSelectOption(rowIndex, firstOption);
+    handleSelectOption(rowIndex, option);
+    setHighlightedOptionIndex(-1);
   };
 
   return (
-    <div className="rounded-xl border border-base-200 bg-white p-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-medium text-slate-700">Item dispensed</p>
-          <p className="text-xs text-slate-500">Track dispensed brands to include them in billing.</p>
-        </div>
+    <div className="rounded-xl border border-base-200 bg-white p-2">
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-medium text-slate-600">Item dispensed</p>
         {!hideAddButton && (
           <button
             type="button"
-            className="btn btn-sm btn-outline"
+            className="btn btn-xs btn-outline"
             onClick={handleAddRow}
             disabled={!hasBrandOptions || loading}
           >
@@ -320,11 +340,11 @@ const AppointmentMedicineSelector = ({
       </div>
 
       {loading ? (
-        <div className="rounded-xl border border-dashed border-base-300 bg-white p-4 text-center text-sm text-slate-500">
+        <div className="rounded-lg border border-dashed border-base-300 bg-white px-3 py-2 text-center text-xs text-slate-500">
           Loading available medicines…
         </div>
       ) : rowsWithComputed.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-base-300 bg-white p-4 text-sm text-slate-500">
+        <div className="rounded-lg border border-dashed border-base-300 bg-white px-3 py-2 text-xs text-slate-500">
           {hasBrandOptions
             ? 'No medicines selected for this appointment.'
             : 'No medicines configured yet. Head to the Medicines tab to add inventory.'}
@@ -388,17 +408,19 @@ const AppointmentMedicineSelector = ({
                         />
                         {activeIndex === index && hasBrandOptions && overlayStyle.width > 0 && (
                           <DropdownPortal style={overlayStyle}>
-                            {row.filteredOptions.map((option) => {
+                            {row.filteredOptions.map((option, optIdx) => {
                               const isSelected = option.value === row.medicineBrandId;
+                              const isHighlighted = optIdx === highlightedOptionIndex;
                               return (
                                 <li key={option.value}>
                                   <button
                                     type="button"
                                     className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition ${
-                                      isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-base-200'
+                                      isHighlighted ? 'bg-base-300 text-base-content' : isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-base-200'
                                     }`}
                                     onMouseDown={(event) => event.preventDefault()}
-                                    onClick={() => handleSelectOption(index, option)}
+                                    onMouseEnter={() => setHighlightedOptionIndex(optIdx)}
+                                    onClick={() => { handleSelectOption(index, option); setHighlightedOptionIndex(-1); }}
                                   >
                                     <span className="flex-1">{option.label}</span>
                                     <span className="text-xs text-slate-500">
@@ -496,12 +518,12 @@ const AppointmentMedicineSelector = ({
       )}
 
       {rowsWithComputed.length > 0 && brandOptions.length > 0 && (
-        <div className="mt-4 flex justify-end text-sm font-semibold text-slate-700">
-          Medicine subtotal: {currencyFormatter.format(medicinesTotal)}
+        <div className="mt-1.5 flex justify-end text-xs font-semibold text-slate-600">
+          Subtotal: {currencyFormatter.format(medicinesTotal)}
         </div>
       )}
     </div>
   );
-};
+});
 
 export default AppointmentMedicineSelector;

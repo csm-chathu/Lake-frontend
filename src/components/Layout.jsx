@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import Sidebar from './Sidebar.jsx';
 import Navbar from './NavBar.jsx';
+import PrinterConfigModal from './PrinterConfigModal.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { useIsFetching, useIsMutating } from '@tanstack/react-query';
 import { useClinicSettings } from '../context/ClinicSettingsContext.jsx';
 import { getPosNavItems, isPosUserType } from '../constants/navigation.js';
 
@@ -11,9 +11,6 @@ const Layout = ({ children }) => {
   const auth = useAuth();
   const location = useLocation();
   const { settings } = useClinicSettings();
-  const pendingQueries = useIsFetching();
-  const pendingMutations = useIsMutating();
-  const showLoader = pendingQueries + pendingMutations > 0;
   const [isCashierMenuOpen, setIsCashierMenuOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -22,9 +19,10 @@ const Layout = ({ children }) => {
   const isCashier = isPosUserType(auth?.user?.user_type);
 
   return (
-    <div className="flex min-h-screen bg-white text-slate-900">
+    <div className="flex min-h-screen bg-slate-50 text-slate-900">
+      {window.electronAPI?.isElectron && <PrinterConfigModal />}
       {!onLoginPage && auth && auth.user && !isCashier ? <Sidebar /> : null}
-      <div className="flex-1 flex flex-col bg-white">
+      <div className="flex-1 flex flex-col bg-slate-50">
         {!onLoginPage && auth && auth.user ? (
           <Navbar
             isCashier={isCashier}
@@ -32,14 +30,14 @@ const Layout = ({ children }) => {
             onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
           />
         ) : null}
-        <main className={`flex-1 overflow-y-auto relative ${onLoginPage ? '' : 'px-6 py-10 lg:px-12 lg:py-12'}`}>
+        <main className={`flex-1 overflow-y-auto relative ${onLoginPage ? '' : 'px-6 py-3 lg:px-12 lg:py-4'}`}>
           <div className={`${onLoginPage ? '' : 'mx-auto w-full max-w-8xl space-y-8'} relative`}>{children}</div>
 
           {!onLoginPage && auth?.user && !isCashier ? (
             <div className="fixed right-1 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-2">
               <Link
                 to="/appointments"
-                className="btn btn-sm btn-primary shadow-lg hover:shadow-xl py-10 px-2 min-h-[210px] w-10"
+                className="btn btn-sm shadow-lg hover:shadow-xl py-10 px-2 min-h-[210px] w-10 bg-blue-700 hover:bg-blue-600 border-blue-700 text-white"
                 style={{ writingMode: 'vertical-rl' }}
                 title="Treatment"
               >
@@ -47,7 +45,7 @@ const Layout = ({ children }) => {
               </Link>
               <Link
                 to="/sales"
-                className="btn btn-sm btn-success text-white shadow-lg hover:shadow-xl py-10 px-2 min-h-[230px] w-10"
+                className="btn btn-sm shadow-lg hover:shadow-xl py-10 px-2 min-h-[230px] w-10 bg-amber-500 hover:bg-amber-400 border-amber-500 text-white"
                 style={{ writingMode: 'vertical-rl' }}
                 title="Direct Sales"
               >
@@ -64,7 +62,7 @@ const Layout = ({ children }) => {
                 onClick={() => setIsSidebarOpen(false)}
                 aria-label="Close sidebar"
               />
-              <aside className="fixed left-0 top-0 z-50 flex h-full w-64 flex-col border-r border-slate-800 bg-black text-slate-100 shadow-2xl lg:hidden">
+              <aside className="fixed left-0 top-0 z-50 flex h-full w-64 flex-col border-r border-slate-800 bg-[#0d1b3e] text-slate-100 shadow-2xl lg:hidden">
                 <div className="flex items-center justify-between border-b border-slate-800 px-4 py-4">
                   <p className="text-sm font-semibold tracking-wide">{settings?.name}</p>
                   <button
@@ -88,7 +86,7 @@ const Layout = ({ children }) => {
                 onClick={() => setIsCashierMenuOpen(false)}
                 aria-label="Close menu"
               />
-              <aside className="fixed left-0 top-0 z-50 flex h-full w-72 flex-col border-r border-slate-800 bg-black text-slate-100 shadow-2xl">
+              <aside className="fixed left-0 top-0 z-50 flex h-full w-72 flex-col border-r border-slate-800 bg-[#0d1b3e] text-slate-100 shadow-2xl">
                 <div className="flex items-center justify-between border-b border-slate-800 px-4 py-4">
                   <p className="text-sm font-semibold tracking-wide">Menu</p>
                   <button
@@ -109,7 +107,7 @@ const Layout = ({ children }) => {
                           onClick={() => setIsCashierMenuOpen(false)}
                           className={({ isActive }) =>
                             `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                              isActive ? 'bg-primary/20 text-white' : 'text-slate-100 hover:bg-slate-800'
+                              isActive ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
                             }`
                           }
                         >
@@ -132,15 +130,6 @@ const Layout = ({ children }) => {
             />
           )}
 
-          {showLoader && (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80">
-              <div className="flex flex-col items-center gap-4 text-white">
-                <div className="h-12 w-12 rounded-full border-4 border-white/30 border-t-white animate-spin" aria-hidden="true" />
-                <div className="text-lg font-semibold tracking-wide">{settings?.name}</div>
-                <div className="text-xs uppercase tracking-[0.2em] text-white/70">Loading</div>
-              </div>
-            </div>
-          )}
         </main>
       </div>
     </div>

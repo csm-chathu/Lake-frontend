@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import JsBarcode from 'jsbarcode';
 import { useClinicSettings } from '../context/ClinicSettingsContext.jsx';
 
@@ -135,33 +136,33 @@ const InvoicePrintModal = ({
     const subtotalVal = lineItems.reduce((s, i) => s + i.qty * i.unit, 0);
     const itemRows = lineItems.map((item) => {
       const lineTotal = item.qty * item.unit;
+      const detail = item.qty > 1 ? ` (${item.qty} x ${formatValue(formatter, item.unit)})` : '';
       return `<tr>
-        <td style="padding:3px 2px">${escapeHtml(item.label)}</td>
-        <td style="text-align:center;padding:3px 2px">${item.qty}</td>
-        <td style="text-align:right;padding:3px 2px">${formatValue(formatter, item.unit)}</td>
-        <td style="text-align:right;padding:3px 2px">${formatValue(formatter, lineTotal)}</td>
+        <td style="padding:4px 2px">${escapeHtml(item.label)}${escapeHtml(detail)}</td>
+        <td style="text-align:right;padding:4px 2px;white-space:nowrap">${formatValue(formatter, lineTotal)}</td>
       </tr>`;
     }).join('');
     const barcodeSection = invoiceReference && barcodeMarkup
-      ? `<div style="margin-top:8px;text-align:center"><div style="font-size:10px;margin-bottom:2px">Ref: ${escapeHtml(invoiceReference)}</div>${barcodeMarkup}</div>`
+      ? `<div style="margin-top:8px;text-align:center"><div style="font-size:18px;margin-bottom:2px">Ref: ${escapeHtml(invoiceReference)}</div>${barcodeMarkup}</div>`
       : '';
 
     return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"/><title>Receipt</title>
 <style>
-  @page { size: 80mm auto; margin: 3mm 2mm; }
+  @page { size: 80mm auto; margin: 0; }
   * { box-sizing: border-box; }
-  body { font-family: 'Courier New', monospace; font-size: 12px; margin: 0; padding: 0; width: 76mm; color: #111; }
+  html, body { width: 80mm !important; margin: 0 !important; }
+  body { font-family: 'Courier New', monospace; font-size: 12px; color: #111; padding: 3mm 2mm; page-break-inside: avoid; }
   .center { text-align: center; }
-  .dashed { border: none; border-top: 1px dashed #555; margin: 5px 0; }
-  .solid  { border: none; border-top: 2px solid #111; margin: 5px 0; }
+  .dashed { border: none; border-top: 1px dashed #555; margin: 4px 0; }
+  .solid  { border: none; border-top: 2px solid #111; margin: 4px 0; }
   .clinic-name { font-size: 15px; font-weight: 700; }
-  .clinic-sub  { font-size: 11px; color: #333; margin-top: 2px; }
+  .clinic-sub  { font-size: 10px; color: #333; margin-top: 2px; }
   table { width: 100%; border-collapse: collapse; }
-  th { font-size: 10px; text-transform: uppercase; padding: 3px 2px; border-bottom: 1px solid #555; }
-  td { font-size: 11px; vertical-align: top; }
-  .total-row td { font-size: 13px; font-weight: 700; padding-top: 4px; }
-  .meta { font-size: 11px; margin: 2px 0; }
+  th { font-size: 11px; text-transform: uppercase; padding: 3px 2px; border-bottom: 1px solid #555; }
+  td { font-size: 12px; vertical-align: top; padding: 3px 2px; }
+  .total-row td { font-size: 16px; font-weight: 700; padding-top: 4px; }
+  .meta { font-size: 12px; margin: 3px 0; }
   .footer { font-size: 11px; text-align: center; margin-top: 6px; }
 </style>
 </head><body>
@@ -179,8 +180,6 @@ const InvoicePrintModal = ({
   <table>
     <thead><tr>
       <th style="text-align:left">Item</th>
-      <th style="text-align:center">Qty</th>
-      <th style="text-align:right">Unit</th>
       <th style="text-align:right">Total</th>
     </tr></thead>
     <tbody>${itemRows}</tbody>
@@ -204,8 +203,10 @@ const InvoicePrintModal = ({
     setIsPrinting(true);
     try {
       if (window.electronAPI?.printReceipt) {
-        const result = await window.electronAPI.printReceipt(buildReceiptHtml());
-        console.log('[printReceipt] result:', result);
+        const config = await window.electronAPI.getPrinterConfig().catch(() => ({}));
+        const printerName = config?.pos?.name || '';
+        const result = await window.electronAPI.printReceipt(buildReceiptHtml(), printerName);
+        console.log('[printReceipt] printer:', printerName, '| result:', result);
         return;
       }
 
@@ -221,7 +222,7 @@ const InvoicePrintModal = ({
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto py-6">
       <div className="absolute inset-0 bg-black/50" onClick={onClose}/>
       {/* Receipt-style preview card */}
@@ -323,7 +324,7 @@ const InvoicePrintModal = ({
         </div>
       </div>
     </div>
-  );
+  , document.body);
 };
 
 export default InvoicePrintModal;

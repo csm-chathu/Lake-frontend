@@ -423,8 +423,25 @@ const SalaryManagementPage = () => {
       </section>
 
       {loading ? (
-        <div className="rounded-2xl border border-base-300 bg-base-100 p-6 text-center text-slate-500 shadow-sm">
-          Loading salary records…
+        <div className="space-y-3 animate-pulse">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 bg-slate-50">
+                <div className="space-y-1.5">
+                  <div className="h-3.5 w-36 rounded-full bg-slate-200" />
+                  <div className="h-3 w-20 rounded-full bg-slate-100" />
+                </div>
+                <div className="flex gap-8">
+                  <div className="h-3.5 w-20 rounded-full bg-slate-100" />
+                  <div className="h-3.5 w-20 rounded-full bg-slate-100" />
+                </div>
+              </div>
+              <div className="px-4 py-2 space-y-2">
+                <div className="h-9 rounded-lg bg-slate-100" />
+                <div className="h-9 rounded-lg bg-slate-100" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : groupedSalaries.length === 0 ? (
         <div className="rounded-2xl border border-base-300 bg-base-100 p-6 text-center text-slate-500 shadow-sm">
