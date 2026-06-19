@@ -447,32 +447,38 @@ const PatientProfileTabs = ({
           </div>
         </div>
         <dl className="grid grid-cols-2 gap-3">
-          <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Species</dt>
-            <dd className="mt-0.5 text-sm font-medium text-slate-700">{selectedPatient?.species || '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Breed</dt>
-            <dd className="mt-0.5 text-sm font-medium text-slate-700">{selectedPatient?.breed || '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Age</dt>
-            <dd className="mt-0.5 text-sm font-medium text-slate-700">{ageLabel || '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Weight</dt>
-            <dd className="mt-0.5 text-sm font-medium text-slate-700">
-              {selectedPatient?.weight ? `${selectedPatient.weight} kg` : '—'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Gender</dt>
-            <dd className="mt-0.5 text-sm font-medium text-slate-700">
-              {selectedPatient?.gender
-                ? selectedPatient.gender.charAt(0).toUpperCase() + selectedPatient.gender.slice(1)
-                : '—'}
-            </dd>
-          </div>
+          {selectedPatient?.species && (
+            <div>
+              <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Species</dt>
+              <dd className="mt-0.5 text-sm font-medium text-slate-700">{selectedPatient.species}</dd>
+            </div>
+          )}
+          {selectedPatient?.breed && (
+            <div>
+              <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Breed</dt>
+              <dd className="mt-0.5 text-sm font-medium text-slate-700">{selectedPatient.breed}</dd>
+            </div>
+          )}
+          {ageLabel && (
+            <div>
+              <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Age</dt>
+              <dd className="mt-0.5 text-sm font-medium text-slate-700">{ageLabel}</dd>
+            </div>
+          )}
+          {selectedPatient?.weight && (
+            <div>
+              <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Weight</dt>
+              <dd className="mt-0.5 text-sm font-medium text-slate-700">{selectedPatient.weight} kg</dd>
+            </div>
+          )}
+          {selectedPatient?.gender && (
+            <div>
+              <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Gender</dt>
+              <dd className="mt-0.5 text-sm font-medium text-slate-700">
+                {selectedPatient.gender.charAt(0).toUpperCase() + selectedPatient.gender.slice(1)}
+              </dd>
+            </div>
+          )}
           <div>
             <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Visits</dt>
             <dd className="mt-0.5 text-sm font-bold text-blue-600">{history.length}</dd>

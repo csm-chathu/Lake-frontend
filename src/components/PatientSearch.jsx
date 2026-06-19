@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, UserPlus } from 'lucide-react';
 
 const normalize = (value) => String(value ?? '').toLowerCase().trim();
 
@@ -17,6 +17,8 @@ const PatientSearch = ({
   const hasAnyPatients = Array.isArray(patients) && patients.length > 0;
   const [showInlineCreate, setShowInlineCreate] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [inlineName, setInlineName] = useState('');
+  const inlineNameEditedRef = useRef(false);
   const listRef = useRef(null);
 
   const filteredPatients = useMemo(() => {
@@ -59,6 +61,18 @@ const PatientSearch = ({
     setShowInlineCreate(false);
   }, [normalizedQuery]);
 
+  // Sync inline name from query while user hasn't manually edited it
+  useEffect(() => {
+    if (!showCreatePrompt) {
+      inlineNameEditedRef.current = false;
+      setInlineName('');
+      return;
+    }
+    if (!inlineNameEditedRef.current) {
+      setInlineName(query);
+    }
+  }, [showCreatePrompt, query]);
+
   // Scroll highlighted item into view
   useEffect(() => {
     if (highlightedIndex < 0 || !listRef.current) return;
@@ -86,36 +100,50 @@ const PatientSearch = ({
     }
   };
 
-  const searchColClass = inlineRight ? 'md:col-span-5' : 'md:col-span-12';
-
   return (
     <div className="space-y-1.5">
-      <div className="grid gap-2 md:grid-cols-12 md:items-end">
-        <label htmlFor="patient-search" className={`flex flex-col gap-1 w-full ${searchColClass}`}>
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-            Patient / Passbook / Phone
-          </span>
-          <div className="relative">
-            <Search
-              size={13}
-              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
-              aria-hidden="true"
-            />
-            <input
-              id="patient-search"
-              type="search"
-              value={query}
-              onChange={(e) => onQueryChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Search by name, passbook or phone…"
-              className="input input-sm input-bordered w-full pl-8 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100"
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck={false}
-            />
-          </div>
-        </label>
-        {inlineRight ? <div className="md:col-span-7">{inlineRight}</div> : null}
+      {/* Search row — name input appears inline when registering a new patient */}
+      <div className="flex items-center gap-1.5">
+        <div className="relative flex-1">
+          <Search
+            size={11}
+            className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
+            aria-hidden="true"
+          />
+          <input
+            id="patient-search"
+            type="search"
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Search by name, passbook or phone…"
+            className="input input-sm input-bordered w-full pl-6 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+        </div>
+
+        {/* Inline name input — shown only when creating a new patient */}
+        {showCreatePrompt && renderCreateForm && (
+          <>
+            <div className="h-3.5 w-px shrink-0 bg-slate-200" />
+            <div className="relative shrink-0">
+              <UserPlus size={10} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-blue-400" />
+              <input
+                type="text"
+                value={inlineName}
+                onChange={(e) => {
+                  inlineNameEditedRef.current = true;
+                  setInlineName(e.target.value);
+                }}
+                placeholder="Patient name *"
+                className="input input-xs input-bordered w-36 pl-6 bg-blue-50 text-xs text-slate-800 placeholder:text-blue-300 border-blue-200 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100"
+              />
+            </div>
+          </>
+        )}
+        {inlineRight && <div>{inlineRight}</div>}
       </div>
 
       {/* Dropdown results */}
@@ -178,7 +206,7 @@ const PatientSearch = ({
       {/* Registration form */}
       {renderCreateForm && (
         <div className="w-full max-w-none">
-          {renderCreateForm({ normalizedQuery, query, filteredPatients })}
+          {renderCreateForm({ normalizedQuery, query, filteredPatients, inlineName })}
         </div>
       )}
     </div>

@@ -1,6 +1,47 @@
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, ChevronDown, ChevronUp, Image, Package, Plus, Printer, Tag, Trash2, X } from 'lucide-react';
+
+const DoseSizesInput = ({ value = [], scale = '', onChange }) => {
+  const [inputVal, setInputVal] = useState('');
+
+  const addSize = () => {
+    const v = inputVal.trim();
+    if (!v) return;
+    if (!value.includes(v)) onChange([...value, v]);
+    setInputVal('');
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex gap-1.5">
+        <input
+          type="text"
+          className="input input-bordered input-xs flex-1"
+          value={inputVal}
+          placeholder={scale && scale !== 'unit' ? `e.g. 0.5, 1, 2 (in ${scale})` : 'e.g. 1, 2, 5'}
+          onChange={(e) => setInputVal(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addSize(); }
+          }}
+        />
+        <button type="button" className="btn btn-xs btn-outline shrink-0" onClick={addSize}>Add</button>
+      </div>
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {value.map((size, idx) => (
+            <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+              {size}{scale && scale !== 'unit' ? scale : ''}
+              <button type="button" onClick={() => onChange(value.filter((_, i) => i !== idx))} className="text-blue-400 hover:text-blue-700">
+                <X size={9} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 import api from '../api/client.js';
 
 export default function BrandModal({
@@ -300,6 +341,17 @@ export default function BrandModal({
                           placeholder="Optional"
                         />
                       </label>
+
+                      {/* Dose sizes */}
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Dose sizes</span>
+                        <p className="text-[10px] text-slate-400 -mt-0.5">Quick-select presets shown when dispensing this medicine</p>
+                        <DoseSizesInput
+                          value={brand.dose_sizes || []}
+                          scale={brand.scale || ''}
+                          onChange={(v) => update('dose_sizes', v)}
+                        />
+                      </div>
 
                       {/* Brand image */}
                       <div className="flex flex-col gap-1">

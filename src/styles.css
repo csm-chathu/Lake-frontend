@@ -11,6 +11,16 @@ body {
     @apply bg-slate-50 text-slate-900;
 }
 
+/* Remove number input spinner arrows globally */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+
 /* Ensure all form controls use a white background */
 .input,
 .textarea,

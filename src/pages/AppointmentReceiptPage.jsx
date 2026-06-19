@@ -40,7 +40,7 @@ const AppointmentReceiptPage = () => {
   const invoice = state?.invoice || null;
   const from = state?.from || 'history';
   const appointmentDate = state?.appointmentDate || null;
-  const autoprint = Boolean(state?.autoprint);
+
 
   const clinicName = settings?.name || 'Clinic';
   const currencyCode = settings?.currency_code || 'LKR';
@@ -138,7 +138,6 @@ const AppointmentReceiptPage = () => {
   <hr class="dashed"/>
   <div class="meta"><span class="k">Patient</span><span class="v">${escapeHtml(invoice?.patientName || 'Unknown')}</span></div>
   ${invoice?.ownerName ? `<div class="meta"><span class="k">Owner</span><span class="v">${escapeHtml(invoice.ownerName)}</span></div>` : ''}
-  ${invoice?.reason ? `<div class="meta"><span class="k">Reason</span><span class="v">${escapeHtml(invoice.reason)}</span></div>` : ''}
   <hr class="dashed"/>
   <table>
     <thead><tr>
@@ -199,7 +198,7 @@ const AppointmentReceiptPage = () => {
   navigateRef.current = navigate;
 
   useEffect(() => {
-    if (!autoprint || !invoice) return;
+    if (!invoice) return; // autoprint disabled
     // Fire once on mount — no cleanup so re-renders can't cancel the timer
     setTimeout(async () => {
       await handlePrintRef.current();
@@ -328,12 +327,6 @@ const AppointmentReceiptPage = () => {
             <div className="flex justify-between">
               <span className="text-slate-500">Owner</span>
               <span className="font-semibold text-slate-800">{invoice.ownerName}</span>
-            </div>
-          )}
-          {invoice.reason && (
-            <div className="flex justify-between">
-              <span className="text-slate-500">Reason</span>
-              <span className="font-semibold text-slate-800 text-right max-w-[60%]">{invoice.reason}</span>
             </div>
           )}
         </div>

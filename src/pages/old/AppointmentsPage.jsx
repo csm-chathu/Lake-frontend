@@ -700,6 +700,41 @@ const formStateRef = useRef(formState);
     };
   }, [selectedPatient, fetchNextPassbook]);
 
+  const renderQuickPatientForm = useCallback(
+    ({ query: searchValue, inlineName }) => (
+      <QuickPatientRegistrationCard
+        key={selectedPatient ? `edit-${selectedPatient.id}` : 'create-new'}
+        owners={owners}
+        initialPatientName={inlineName || searchValue}
+        hideNameField={Boolean(inlineName !== undefined)}
+        initialValues={selectedPatient}
+        passbookPreview={passbookPreview}
+        createOwner={createOwner}
+        createPatient={createPatient}
+        updatePatient={updatePatient}
+        refreshOwners={refreshOwners}
+        refreshPatients={refreshPatients}
+        onPatientCreated={handlePatientCreated}
+        onPatientUpdated={handlePatientUpdated}
+        hideActions={true}               // hide internal buttons
+        onFormChange={setNewPatientForm} // keep parent's copy
+        onViewPatientInfo={selectedPatient ? () => setShowPatientModal(true) : null}
+      />
+    ),
+    [
+      owners,
+      selectedPatient,
+      passbookPreview,
+      createOwner,
+      createPatient,
+      updatePatient,
+      refreshOwners,
+      refreshPatients,
+      handlePatientCreated,
+      handlePatientUpdated,
+      fetchNextPassbook
+    ]
+  );
 
 
   const syncPatientReports = useCallback(
@@ -1529,9 +1564,9 @@ const formStateRef = useRef(formState);
         )}
       </div>
 
-      {/* ── MAIN AREA: 3-column form ─────────────────────────── */}
+      {/* ── MAIN AREA: form wraps both columns ───────────────── */}
       <form
-        className="flex min-h-0 flex-1 gap-2"
+        className="flex min-h-0 flex-1 gap-3"
         onSubmit={handleSubmit}
         onKeyDown={(e) => {
           if (e.key !== 'Enter') return;
@@ -1541,33 +1576,15 @@ const formStateRef = useRef(formState);
         }}
         data-appointments-form
       >
+        {/* ── LEFT COLUMN: clinical workflow ────────────────── */}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-        {/* ── COL 1: PATIENT ────────────────────────────────── */}
-        <div className="flex w-[300px] shrink-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-
-          {/* Col 1 header */}
+          {/* Card header */}
           <div className="shrink-0 flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-blue-50 to-slate-50 px-3 py-2">
             <div className="flex items-center gap-2">
-              <Users size={13} className="text-blue-500" />
-              <span className="text-xs font-bold text-slate-700">
-                {isGroupMode ? 'Patients' : 'Patient'}
-              </span>
+              <Clock3 size={14} className="text-blue-500" />
+              <span className="text-sm font-bold text-slate-700">{editingId ? 'Edit Treatment' : 'New Treatment'}</span>
               {editingId && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Editing</span>}
-            </div>
-            <div className="flex items-center gap-1.5">
-              {!isGroupMode && !formState.isWalkIn && !editingId && (
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 hover:bg-amber-100 transition"
-                  onClick={() => {
-                    setFormState((prev) => ({ ...prev, isWalkIn: true, patientId: '' }));
-                    setPatientSearchQuery('');
-                    setNewPatientForm(null);
-                  }}
-                >
-                  Walk-in
-                </button>
-              )}
               {!editingId && (
                 <button
                   type="button"
@@ -1578,160 +1595,13 @@ const formStateRef = useRef(formState);
                       : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
                   }`}
                 >
-                  <Users size={9} />
-                  {isGroupMode ? 'Exit Group' : 'Group'}
+                  <Users size={10} />
+                  {isGroupMode ? 'Group Mode ✕' : 'Group Treatment'}
                 </button>
               )}
             </div>
-          </div>
-
-          {/* Appointment time */}
-          <div className="shrink-0 border-b border-slate-100 px-3 py-1.5">
-            {!dateEditing ? (
-              <button
-                type="button"
-                onClick={() => setDateEditing(true)}
-                className="flex w-full items-center gap-1.5 rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-100 transition"
-              >
-                <Clock3 size={11} className="text-slate-400" />
-                <span className="flex-1 text-left">
-                  {formState.date
-                    ? new Date(formState.date).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                    : 'Set appointment time'}
-                </span>
-                <Pencil size={9} className="text-slate-400" />
-              </button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <input
-                  type="datetime-local"
-                  value={typeof formState.date === 'string' ? formState.date : ''}
-                  onChange={(e) => handleChange('date', e.target.value)}
-                  className="input input-xs input-bordered flex-1 bg-white text-xs"
-                />
-                <button type="button" onClick={() => handleChange('date', getCurrentDateTimeLocal())} className="text-[11px] font-medium text-blue-600 hover:underline">Now</button>
-                <button type="button" onClick={() => setDateEditing(false)} className="text-[11px] text-slate-500 hover:underline">Done</button>
-              </div>
-            )}
-          </div>
-
-          {/* Patient column — scrollable */}
-          <div className="flex-1 overflow-y-auto p-2 space-y-2">
-            {isGroupMode ? (
-              <div className="space-y-2">
-                {groupPatients.map((gp, index) => (
-                  <GroupPatientRow
-                    key={gp._key}
-                    entry={gp}
-                    index={index}
-                    patients={patients}
-                    onChange={(field, value) => updateGroupPatient(gp._key, field, value)}
-                    onRemove={() => removeGroupPatient(gp._key)}
-                    canRemove={groupPatients.length > 1}
-                  />
-                ))}
-                <button
-                  type="button"
-                  onClick={addGroupPatient}
-                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50 py-1.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-100 transition"
-                >
-                  <Plus size={12} /> Add patient
-                </button>
-              </div>
-            ) : formState.isWalkIn ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Walk-in
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormState((prev) => ({ ...prev, isWalkIn: false, walkInName: '' }));
-                      setTimeout(() => document.querySelector('[data-patient-search] input')?.focus(), 50);
-                    }}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-xs font-medium text-slate-500 hover:bg-slate-50 transition"
-                  >
-                    <X size={11} /> Cancel
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={formState.walkInName || ''}
-                  onChange={(e) => handleChange('walkInName', e.target.value)}
-                  placeholder="Patient name (optional)"
-                  className="input input-sm input-bordered w-full bg-white placeholder:text-slate-400 focus:border-amber-400 focus:ring-1 focus:ring-amber-100 focus:outline-none"
-                  autoFocus
-                />
-              </div>
-            ) : (
-              <>
-                {/* Search */}
-                <div data-patient-search>
-                  <PatientSearch
-                    query={patientSearchQuery}
-                    onQueryChange={setPatientSearchQuery}
-                    patients={patients}
-                    onSelectPatient={handlePatientSelect}
-                    onCreatePatient={handleQuickCreatePatient}
-                    selectedPatient={selectedPatient}
-                  />
-                </div>
-
-                {/* Registration / edit card — directly below search */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-2">
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-[9px] font-medium uppercase tracking-wide text-slate-400">
-                      {selectedPatient ? 'Patient Info' : 'Register New Patient'}
-                    </span>
-                    {selectedPatient && (
-                      <button
-                        type="button"
-                        data-view-profile
-                        onClick={() => setShowPatientModal(true)}
-                        className="inline-flex items-center gap-1 rounded bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white transition hover:bg-blue-700"
-                        title="View patient profile (F5)"
-                      >
-                        <Eye size={9} /> Profile
-                      </button>
-                    )}
-                  </div>
-                  <QuickPatientRegistrationCard
-                    key={selectedPatient ? `edit-${selectedPatient.id}-${formResetCounter}` : `create-new-${formResetCounter}`}
-                    stacked
-                    owners={owners}
-                    initialPatientName={patientSearchQuery}
-                    hideNameField={false}
-                    initialValues={selectedPatient}
-                    passbookPreview={passbookPreview}
-                    createOwner={createOwner}
-                    createPatient={createPatient}
-                    updatePatient={updatePatient}
-                    refreshOwners={refreshOwners}
-                    refreshPatients={refreshPatients}
-                    onPatientCreated={handlePatientCreated}
-                    onPatientUpdated={handlePatientUpdated}
-                    hideActions={false}
-                    onFormChange={setNewPatientForm}
-                    onViewPatientInfo={selectedPatient ? () => setShowPatientModal(true) : null}
-                  />
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* ── COL 2: CLINICAL + MEDICINES ───────────────────── */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-
-          {/* Col 2 header */}
-          <div className="shrink-0 flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-blue-50 to-slate-50 px-3 py-2">
-            <div className="flex items-center gap-2">
-              <Clock3 size={13} className="text-blue-500" />
-              <span className="text-xs font-bold text-slate-700">{editingId ? 'Edit Treatment' : 'New Treatment'}</span>
-            </div>
             {startedTreatment && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 {formState.isWalkIn ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
                     <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
@@ -1743,71 +1613,174 @@ const formStateRef = useRef(formState);
                     {selectedPatient.name}
                   </span>
                 ) : null}
+                {selectedPatient && !formState.isWalkIn && (
+                  <button
+                    type="button"
+                    data-view-profile
+                    onClick={() => setShowPatientModal(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                    title="View patient profile (F5)"
+                  >
+                    <Eye size={12} /> Profile
+                  </button>
+                )}
               </div>
             )}
           </div>
 
-          {/* Col 2 content — scrollable */}
+          {/* Scrollable sections */}
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
 
-            {/* Reason + Notes */}
+            {/* ── SECTION 1: PATIENT ── */}
             <div className="p-2">
-              <div className="mb-1.5 flex items-center gap-1.5">
-                <ClipboardList size={11} className="text-slate-300" />
-                <span className="text-[9px] font-medium uppercase tracking-wide text-slate-300">Clinical Details</span>
+              <div className="mb-1 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Users size={12} className="text-blue-500" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      {isGroupMode ? 'Patients' : 'Patient'}
+                    </span>
+                  </div>
+                  {!isGroupMode && !formState.isWalkIn && (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 hover:bg-amber-100 transition"
+                      onClick={() => {
+                        setFormState((prev) => ({ ...prev, isWalkIn: true, patientId: '' }));
+                        setPatientSearchQuery('');
+                        setNewPatientForm(null);
+                      }}
+                    >
+                      Walk-in patient
+                    </button>
+                  )}
+                </div>
+                {/* Appointment time — compact inline */}
+                <div className="flex items-center gap-2">
+                  {!dateEditing ? (
+                    <button
+                      type="button"
+                      onClick={() => setDateEditing(true)}
+                      className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50 transition"
+                    >
+                      <Clock3 size={11} className="text-slate-400" />
+                      {formState.date
+                        ? new Date(formState.date).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                        : 'Set time'}
+                      <Pencil size={9} className="text-slate-400" />
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="datetime-local"
+                        value={typeof formState.date === 'string' ? formState.date : ''}
+                        onChange={(e) => handleChange('date', e.target.value)}
+                        className="input input-xs input-bordered bg-white text-xs"
+                      />
+                      <button type="button" onClick={() => handleChange('date', getCurrentDateTimeLocal())} className="text-[11px] font-medium text-blue-600 hover:underline">Now</button>
+                      <button type="button" onClick={() => setDateEditing(false)} className="text-[11px] text-slate-500 hover:underline">Done</button>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-col gap-2">
+
+              {isGroupMode ? (
+                <div className="space-y-2">
+                  {groupPatients.map((gp, index) => (
+                    <GroupPatientRow
+                      key={gp._key}
+                      entry={gp}
+                      index={index}
+                      patients={patients}
+                      brandOptions={brandOptions}
+                      brandLookup={brandLookup}
+                      medicinesLoading={medicinesLoading}
+                      onChange={(field, value) => updateGroupPatient(gp._key, field, value)}
+                      onRemove={() => removeGroupPatient(gp._key)}
+                      canRemove={groupPatients.length > 1}
+                      formResetCounter={formResetCounter}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addGroupPatient}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50 py-1.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-100 transition"
+                  >
+                    <Plus size={12} /> Add patient
+                  </button>
+                </div>
+              ) : formState.isWalkIn ? (
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Walk-in
+                  </span>
+                  <input
+                    type="text"
+                    value={formState.walkInName || ''}
+                    onChange={(e) => handleChange('walkInName', e.target.value)}
+                    placeholder="Patient name (optional)"
+                    className="input input-xs input-bordered min-w-0 flex-1 bg-white placeholder:text-slate-400 focus:border-amber-400 focus:ring-1 focus:ring-amber-100 focus:outline-none"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormState((prev) => ({ ...prev, isWalkIn: false, walkInName: '' }));
+                      setTimeout(() => document.querySelector('[data-patient-search] input')?.focus(), 50);
+                    }}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-xs font-medium text-slate-500 hover:bg-slate-50 transition"
+                  >
+                    <X size={11} /> Cancel
+                  </button>
+                </div>
+              ) : (
+                <div data-patient-search>
+                  <PatientSearch
+                    query={patientSearchQuery}
+                    onQueryChange={setPatientSearchQuery}
+                    patients={patients}
+                    onSelectPatient={handlePatientSelect}
+                    onCreatePatient={handleQuickCreatePatient}
+                    selectedPatient={selectedPatient}
+                    renderCreateForm={renderQuickPatientForm}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* ── SECTION 2: CLINICAL DETAILS ── */}
+            <div className="p-2">
+              <div className="mb-1 flex items-center gap-1.5">
+                <ClipboardList size={12} className="text-emerald-500" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Clinical Details</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
                 <ReasonInput
                   inputRef={reasonInputRef}
                   value={typeof formState.reason === 'string' ? formState.reason : ''}
                   onChange={(v) => handleChange('reason', capitalizeFirstLetter(v))}
                   placeholder="Reason for visit"
+
                   onEnterNoDropdown={() => {
                     if (formState.medicines?.length > 0) medicineSelectorRef.current?.focusFirst();
                   }}
                 />
-                <textarea
-                  rows={3}
+                <input
+                  type="text"
                   value={typeof formState.notes === 'string' ? formState.notes : ''}
                   onChange={(e) => handleChange('notes', capitalizeFirstLetter(e.target.value))}
                   placeholder="Notes / prep steps…"
-                  className="textarea textarea-bordered w-full resize-none bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100"
+                  className="input input-sm input-bordered w-full bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100"
                 />
               </div>
             </div>
 
-            {/* Prescription */}
-            {isGroupMode ? (
-              groupPatients.map((gp, index) => {
-                const gpPatient = patients.find((p) => String(p.id) === String(gp.patientId));
-                const label = gpPatient?.name || gp.searchQuery || `Patient ${index + 1}`;
-                return (
-                  <div key={gp._key} className="p-2 border-b border-slate-100 last:border-b-0">
-                    <div className="mb-1.5 flex items-center gap-1.5">
-                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[9px] font-bold text-white">
-                        {index + 1}
-                      </span>
-                      <Pill size={11} className="text-slate-300" />
-                      <span className="text-[9px] font-medium uppercase tracking-wide text-slate-300">
-                        {label}
-                      </span>
-                    </div>
-                    <AppointmentMedicineSelector
-                      key={`medicines-group-${gp._key}-reset-${formResetCounter}`}
-                      value={gp.medicines || []}
-                      onChange={(v) => updateGroupPatient(gp._key, 'medicines', v)}
-                      brandOptions={brandOptions}
-                      brandLookup={brandLookup}
-                      loading={medicinesLoading}
-                    />
-                  </div>
-                );
-              })
-            ) : (
+            {/* ── SECTION 3: PRESCRIPTION (single-patient mode only) ── */}
+            {!isGroupMode && (
               <div className="p-2">
-                <div className="mb-1.5 flex items-center gap-1.5">
-                  <Pill size={11} className="text-slate-300" />
-                  <span className="text-[9px] font-medium uppercase tracking-wide text-slate-300">Prescription</span>
+                <div className="mb-1 flex items-center gap-1.5">
+                  <Pill size={12} className="text-violet-500" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Prescription</span>
                 </div>
                 <AppointmentMedicineSelector
                   ref={medicineSelectorRef}
@@ -1827,7 +1800,7 @@ const formStateRef = useRef(formState);
               </div>
             )}
 
-            {/* Vaccine follow-up */}
+            {/* ── SECTION 4: VACCINE FOLLOW-UP (single-patient mode only) ── */}
             {!isGroupMode && hasVaccineMedicine && (
               <div className="p-2">
                 <VaccineFollowUp
@@ -1840,13 +1813,14 @@ const formStateRef = useRef(formState);
                 />
               </div>
             )}
+
           </div>
         </div>
 
-        {/* ── COL 3: CHARGES + PAYMENT + SUBMIT ────────────── */}
-        <div className="flex w-[380px] shrink-0 flex-col gap-2">
+        {/* ── RIGHT COLUMN: charges + submit ────────────────── */}
+        <div className="flex w-[480px] shrink-0 flex-col gap-2">
 
-          {/* Charges panel — scrollable */}
+          {/* Charges panel */}
           <div className="min-h-0 flex-1 overflow-y-auto">
             <AppointmentChargesSummary
               formState={isGroupMode
@@ -1860,7 +1834,7 @@ const formStateRef = useRef(formState);
             />
           </div>
 
-          {/* Submit — pinned at bottom */}
+          {/* Submit panel — always visible */}
           <div className="shrink-0 rounded-2xl border border-slate-200 bg-white px-2.5 py-2 shadow-sm">
             <div className="flex flex-col gap-1.5">
               <button

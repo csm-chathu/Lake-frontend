@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { AlertTriangle, PackageOpen, Scissors, Stethoscope, Tag, WalletCards, Wrench } from 'lucide-react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { AlertTriangle, ChevronDown, ChevronUp, PackageOpen, Scissors, Stethoscope, Tag, WalletCards, Wrench } from 'lucide-react';
 import useEntityApi from '../hooks/useEntityApi.js';
 import { calculateMedicinesTotal } from './AppointmentMedicineSelector.jsx';
 import PaymentFooter from './PaymentFooter.jsx';
@@ -12,7 +12,15 @@ const capitalizeFirstLetter = (string) => {
 };
 
 const inputClass =
-  'input input-xs input-bordered w-24 bg-white text-xs text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100';
+  'input input-sm input-bordered w-28 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100';
+
+const useChargeKeyDown = (setter) => (e) => {
+  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+  e.preventDefault();
+  const current = Number.parseFloat(e.target.value) || 0;
+  const next = Math.max(0, current + (e.key === 'ArrowUp' ? 10 : -10));
+  setter(String(next));
+};
 
 function PresetButton({ active, onClick, children }) {
   return (
@@ -96,6 +104,11 @@ export default function AppointmentChargesSummary({
   }, [doctorChargeValue, surgeryChargeValue, serviceChargeValue, disposableChargeValue, medicinesTotal, discountValue]);
 
   const set = (name, value) => setFormState((prev) => ({ ...prev, [name]: value }));
+  const onDoctorKeyDown    = useChargeKeyDown((v) => set('doctorCharge', v));
+  const onSurgeryKeyDown   = useChargeKeyDown((v) => set('surgeryCharge', v));
+  const onDisposableKeyDown= useChargeKeyDown((v) => set('disposableCharge', v));
+  const onOtherKeyDown     = useChargeKeyDown((v) => set('otherCharge', v));
+  const onDiscountKeyDown  = useChargeKeyDown((v) => set('discount', v));
 
   const doctorPresets =
     Array.isArray(chargePresets) && chargePresets.length
@@ -120,6 +133,14 @@ export default function AppointmentChargesSummary({
 
   const gross = doctorChargeValue + surgeryChargeValue + serviceChargeValue + disposableChargeValue + medicinesTotal;
 
+  const hasSecondaryCharges = surgeryChargeValue > 0 || disposableChargeValue > 0 || serviceChargeValue > 0 || discountValue > 0;
+  const [showMore, setShowMore] = useState(hasSecondaryCharges);
+
+  // Auto-expand when an existing appointment with secondary charges is loaded
+  useEffect(() => {
+    if (hasSecondaryCharges) setShowMore(true);
+  }, [hasSecondaryCharges]);
+
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       {/* Header */}
@@ -128,43 +149,88 @@ export default function AppointmentChargesSummary({
         <h3 className="text-sm font-semibold text-slate-800">Charges &amp; Payment</h3>
       </div>
 
-      <div className="p-2">
-        <div className="grid gap-2 lg:grid-cols-2">
+      <div className="space-y-2 p-2">
 
-          {/* ── LEFT COLUMN ── */}
+        {/* Doctor Charge — always visible */}
+        <SectionCard icon={Stethoscope} label="Doctor Charge">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(() => {
+              const current = typeof formState.doctorCharge === 'string' ? formState.doctorCharge : '';
+              const numeric = Number.parseFloat(current) || 0;
+              return (
+                <>
+                  {doctorPresets.map((preset) => {
+                    const active = Number(preset.value) === numeric;
+                    return (
+                      <PresetButton key={preset.id ?? preset.value} active={active} onClick={() => set('doctorCharge', active ? '' : String(preset.value))}>
+                        <span className="block text-xs font-bold leading-tight">{currencyFormatter.format(preset.value)}</span>
+                        <span className="block text-[9px] font-normal opacity-70">{preset.label}</span>
+                      </PresetButton>
+                    );
+                  })}
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={current}
+                    onChange={(e) => set('doctorCharge', e.target.value)}
+                    onKeyDown={onDoctorKeyDown}
+                    placeholder="Custom"
+                    className={inputClass}
+                  />
+                </>
+              );
+            })()}
+          </div>
+        </SectionCard>
+
+        {/* Toggle for secondary charges */}
+        <button
+          type="button"
+          onClick={() => setShowMore((v) => !v)}
+          className="flex w-full items-center justify-between rounded-lg border border-dashed border-slate-200 px-2.5 py-1.5 text-left text-xs font-medium text-slate-500 hover:border-slate-300 hover:bg-slate-50 transition"
+        >
+          <span>{showMore ? 'Hide extra charges' : '+ Surgery / Disposable / Other / Discount'}</span>
+          {showMore ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </button>
+
+        {/* Secondary charges — collapsible */}
+        {showMore && (
           <div className="space-y-1.5">
-
-            {/* Doctor Charge */}
-            <SectionCard icon={Stethoscope} label="Doctor Charge">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {(() => {
-                  const current = typeof formState.doctorCharge === 'string' ? formState.doctorCharge : '';
-                  const numeric = Number.parseFloat(current) || 0;
-                  return (
-                    <>
-                      {doctorPresets.map((preset) => {
-                        const active = Number(preset.value) === numeric;
-                        return (
-                          <PresetButton key={preset.id ?? preset.value} active={active} onClick={() => set('doctorCharge', active ? '' : String(preset.value))}>
-                            <span className="block text-xs font-bold leading-tight">{currencyFormatter.format(preset.value)}</span>
-                            <span className="block text-[9px] font-normal opacity-70">{preset.label}</span>
-                          </PresetButton>
-                        );
-                      })}
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={current}
-                        onChange={(e) => set('doctorCharge', e.target.value)}
-                        placeholder="Custom"
-                        className={inputClass}
-                      />
-                    </>
-                  );
-                })()}
-              </div>
-            </SectionCard>
+            {/* Surgery Charge */}
+            {surgeryPresets.length > 0 && (
+              <SectionCard icon={Scissors} label="Surgery Charge">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(() => {
+                    const current = typeof formState.surgeryCharge === 'string' ? formState.surgeryCharge : '';
+                    const numeric = Number.parseFloat(current) || 0;
+                    return (
+                      <>
+                        {surgeryPresets.map((preset) => {
+                          const active = Number(preset.value) === numeric;
+                          return (
+                            <PresetButton key={preset.id ?? preset.value} active={active} onClick={() => set('surgeryCharge', active ? '' : String(preset.value))}>
+                              <span className="block text-xs font-bold leading-tight">{currencyFormatter.format(preset.value)}</span>
+                              <span className="block text-[9px] font-normal opacity-70">{preset.label}</span>
+                            </PresetButton>
+                          );
+                        })}
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={current}
+                          onChange={(e) => set('surgeryCharge', e.target.value)}
+                          onKeyDown={onSurgeryKeyDown}
+                          placeholder="Custom"
+                          className={inputClass}
+                        />
+                      </>
+                    );
+                  })()}
+                </div>
+              </SectionCard>
+            )}
 
             {/* Disposable Charge */}
             <SectionCard icon={PackageOpen} label="Disposable Charge">
@@ -189,6 +255,7 @@ export default function AppointmentChargesSummary({
                         step="0.01"
                         value={current}
                         onChange={(e) => set('disposableCharge', e.target.value)}
+                        onKeyDown={onDisposableKeyDown}
                         placeholder="Custom"
                         className={inputClass}
                       />
@@ -207,6 +274,7 @@ export default function AppointmentChargesSummary({
                   step="0.01"
                   value={typeof formState.otherCharge === 'string' ? formState.otherCharge : ''}
                   onChange={(e) => set('otherCharge', e.target.value)}
+                  onKeyDown={onOtherKeyDown}
                   placeholder="Amount"
                   className={inputClass}
                 />
@@ -215,7 +283,7 @@ export default function AppointmentChargesSummary({
                   value={typeof formState.otherChargeReason === 'string' ? formState.otherChargeReason : ''}
                   onChange={(e) => set('otherChargeReason', capitalizeFirstLetter(e.target.value))}
                   placeholder="Reason (optional)"
-                  className="input input-xs input-bordered flex-1 min-w-[120px] bg-white text-xs text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100"
+                  className="input input-sm input-bordered flex-1 min-w-[120px] bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100"
                 />
               </div>
             </SectionCard>
@@ -242,105 +310,68 @@ export default function AppointmentChargesSummary({
                   step="0.01"
                   value={formState.discount || ''}
                   onChange={(e) => set('discount', e.target.value)}
+                  onKeyDown={onDiscountKeyDown}
                   placeholder="Custom"
                   className={inputClass}
                 />
               </div>
             </SectionCard>
           </div>
+        )}
 
-          {/* ── RIGHT COLUMN ── */}
-          <div className="space-y-1.5">
-
-            {/* Surgery Charge (conditional) */}
-            {surgeryPresets.length > 0 && (
-              <SectionCard icon={Scissors} label="Surgery Charge">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {(() => {
-                    const current = typeof formState.surgeryCharge === 'string' ? formState.surgeryCharge : '';
-                    const numeric = Number.parseFloat(current) || 0;
-                    return (
-                      <>
-                        {surgeryPresets.map((preset) => {
-                          const active = Number(preset.value) === numeric;
-                          return (
-                            <PresetButton key={preset.id ?? preset.value} active={active} onClick={() => set('surgeryCharge', active ? '' : String(preset.value))}>
-                              <span className="block text-xs font-bold leading-tight">{currencyFormatter.format(preset.value)}</span>
-                              <span className="block text-[9px] font-normal opacity-70">{preset.label}</span>
-                            </PresetButton>
-                          );
-                        })}
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={current}
-                          onChange={(e) => set('surgeryCharge', e.target.value)}
-                          placeholder="Custom"
-                          className={inputClass}
-                        />
-                      </>
-                    );
-                  })()}
-                </div>
-              </SectionCard>
-            )}
-
-            {/* Charge breakdown — line by line */}
-            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-              {[
-                { label: 'Doctor', value: doctorChargeValue },
-                { label: 'Surgery', value: surgeryChargeValue },
-                { label: 'Service', value: serviceChargeValue },
-                { label: 'Disposable', value: disposableChargeValue },
-                { label: 'Medicines', value: medicinesTotal },
-              ].map(({ label, value }, i) => (
-                <div key={label} className={`flex items-center justify-between px-3 py-1.5 ${i > 0 ? 'border-t border-slate-100' : ''}`}>
-                  <span className="text-[11px] text-slate-500">{label}</span>
-                  <span className={`text-[11px] font-semibold tabular-nums ${value > 0 ? 'text-slate-800' : 'text-slate-300'}`}>
-                    {currencyFormatter.format(value)}
-                  </span>
-                </div>
-              ))}
-              {discountValue > 0 && (
-                <div className="flex items-center justify-between border-t border-emerald-100 bg-emerald-50 px-3 py-1.5">
-                  <span className="text-[11px] font-medium text-emerald-600">Discount</span>
-                  <span className="text-[11px] font-semibold tabular-nums text-emerald-600">− {currencyFormatter.format(discountValue)}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between border-t-2 border-blue-300 bg-blue-600 px-3 py-2">
-                <span className="text-xs font-bold text-blue-100">Total</span>
-                <span className="text-sm font-bold tabular-nums text-white">{currencyFormatter.format(totalChargeEstimate)}</span>
-              </div>
+        {/* Charge breakdown */}
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          {[
+            { label: 'Doctor', value: doctorChargeValue },
+            { label: 'Surgery', value: surgeryChargeValue },
+            { label: 'Service', value: serviceChargeValue },
+            { label: 'Disposable', value: disposableChargeValue },
+            { label: 'Medicines', value: medicinesTotal },
+          ].filter(({ value }) => value > 0).map(({ label, value }, i) => (
+            <div key={label} className={`flex items-center justify-between px-3 py-1.5 ${i > 0 ? 'border-t border-slate-100' : ''}`}>
+              <span className="text-[11px] text-slate-500">{label}</span>
+              <span className="text-[11px] font-semibold tabular-nums text-slate-800">
+                {currencyFormatter.format(value)}
+              </span>
             </div>
-
-            {/* Payment */}
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-              <div className="mb-1 flex items-center gap-2">
-                <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">Payment Method</span>
-              </div>
-              <PaymentFooter
-                paymentType={formState.paymentType}
-                paymentStatus={formState.paymentStatus}
-                settledAt={formState.settledAt}
-                onPaymentTypeChange={(value) => set('paymentType', value)}
-                onPaymentStatusChange={(value) => set('paymentStatus', value)}
-                onSettledAtChange={(value) => set('settledAt', value)}
-                paymentStatusOptions={paymentStatusOptions}
-              />
+          ))}
+          {discountValue > 0 && (
+            <div className="flex items-center justify-between border-t border-emerald-100 bg-emerald-50 px-3 py-1.5">
+              <span className="text-[11px] font-medium text-emerald-600">Discount</span>
+              <span className="text-[11px] font-semibold tabular-nums text-emerald-600">− {currencyFormatter.format(discountValue)}</span>
             </div>
-
-            {/* Credit warning */}
-            {formState.paymentType === 'credit' && formState.paymentStatus !== 'paid' && (
-              <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5">
-                <AlertTriangle size={12} className="mt-0.5 shrink-0 text-amber-500" />
-                <p className="text-xs text-amber-700">
-                  <strong>Credit payment:</strong> Remember to mark this visit as paid once the balance is settled.
-                </p>
-              </div>
-            )}
+          )}
+          <div className="flex items-center justify-between border-t-2 border-blue-300 bg-blue-600 px-3 py-2">
+            <span className="text-xs font-bold text-blue-100">Total</span>
+            <span className="text-sm font-bold tabular-nums text-white">{currencyFormatter.format(totalChargeEstimate)}</span>
           </div>
         </div>
+
+        {/* Payment */}
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+          <div className="mb-1 flex items-center gap-2">
+            <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">Payment Method</span>
+          </div>
+          <PaymentFooter
+            paymentType={formState.paymentType}
+            paymentStatus={formState.paymentStatus}
+            settledAt={formState.settledAt}
+            onPaymentTypeChange={(value) => set('paymentType', value)}
+            onPaymentStatusChange={(value) => set('paymentStatus', value)}
+            onSettledAtChange={(value) => set('settledAt', value)}
+            paymentStatusOptions={paymentStatusOptions}
+          />
+        </div>
+
+        {/* Credit warning */}
+        {formState.paymentType === 'credit' && formState.paymentStatus !== 'paid' && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5">
+            <AlertTriangle size={12} className="mt-0.5 shrink-0 text-amber-500" />
+            <p className="text-xs text-amber-700">
+              <strong>Credit payment:</strong> Remember to mark this visit as paid once the balance is settled.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -13,20 +14,38 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import AppointmentMedicineSelector, { calculateMedicinesTotal } from '../components/AppointmentMedicineSelector.jsx';
+import { calculateMedicinesTotal } from '../components/AppointmentMedicineSelector.jsx';
 import useEntityApi from '../hooks/useEntityApi.js';
 import { useClinicSettings } from '../context/ClinicSettingsContext.jsx';
 import { useNavigate } from 'react-router-dom';
+import api from '../api/client.js';
 
 const currencyFormatter = new Intl.NumberFormat('en-LK', { style: 'currency', currency: 'LKR' });
 
-const formatCategoryLabel = (value) => {
-  const normalized = String(value || '').trim();
-  if (!normalized) {
-    return 'Other';
-  }
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+const LETTER_COLORS = [
+  { bg: 'bg-rose-100',    icon: 'text-rose-400'    },
+  { bg: 'bg-orange-100',  icon: 'text-orange-400'  },
+  { bg: 'bg-amber-100',   icon: 'text-amber-500'   },
+  { bg: 'bg-yellow-100',  icon: 'text-yellow-500'  },
+  { bg: 'bg-lime-100',    icon: 'text-lime-500'    },
+  { bg: 'bg-green-100',   icon: 'text-green-500'   },
+  { bg: 'bg-emerald-100', icon: 'text-emerald-500' },
+  { bg: 'bg-teal-100',    icon: 'text-teal-500'    },
+  { bg: 'bg-cyan-100',    icon: 'text-cyan-500'    },
+  { bg: 'bg-sky-100',     icon: 'text-sky-500'     },
+  { bg: 'bg-blue-100',    icon: 'text-blue-500'    },
+  { bg: 'bg-indigo-100',  icon: 'text-indigo-500'  },
+  { bg: 'bg-violet-100',  icon: 'text-violet-500'  },
+  { bg: 'bg-purple-100',  icon: 'text-purple-500'  },
+  { bg: 'bg-fuchsia-100', icon: 'text-fuchsia-500' },
+  { bg: 'bg-pink-100',    icon: 'text-pink-500'    },
+];
+
+const getLetterColor = (name) => {
+  const code = (name || '').trim().toUpperCase().charCodeAt(0) || 0;
+  return LETTER_COLORS[code % LETTER_COLORS.length];
 };
+
 
 const generateSaleReference = () => {
   const now = new Date();
@@ -50,11 +69,13 @@ const DirectSalesPage = () => {
   const { settings } = useClinicSettings();
   const directSalesApi = useEntityApi('direct-sales');
   const medicinesApi = useEntityApi('medicines');
+  const suppliersApi = useEntityApi('suppliers');
 
 
   const { createItem: createDirectSale, error: directSalesError, refresh: refreshDirectSales } = directSalesApi;
-  const { items: medicines, loading: medicinesLoading, error: medicinesError } = medicinesApi;
+  const { items: medicines, error: medicinesError } = medicinesApi;
   const { refresh: refreshMedicines } = medicinesApi;
+  const { items: suppliers } = suppliersApi;
 
   // Load discount presets from API
   const { items: discountsApi, loading: discountsLoading } = useEntityApi('discounts');
@@ -66,9 +87,106 @@ const DirectSalesPage = () => {
   const [formError, setFormError] = useState('');
   const [catalogSearch, setCatalogSearch] = useState('');
   const [catalogHint, setCatalogHint] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
   const [highlightedTileIndex, setHighlightedTileIndex] = useState(-1);
   const tilesGridRef = useRef(null);
+
+  const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [addItemForm, setAddItemForm] = useState({ brandName: '', price: '', stock: '', barcode: '', expiryDate: '', supplierId: '' });
+  const [addItemSelectedMedicine, setAddItemSelectedMedicine] = useState(null);
+  const [addItemNameQuery, setAddItemNameQuery] = useState('');
+  const [addItemDropdownOpen, setAddItemDropdownOpen] = useState(false);
+  const [addItemHighlight, setAddItemHighlight] = useState(-1);
+  const [addItemError, setAddItemError] = useState('');
+  const [addItemSaving, setAddItemSaving] = useState(false);
+  const addItemNameRef = useRef(null);
+
+  const openAddItemModal = () => {
+    const q = catalogSearch.trim();
+    setAddItemForm({ brandName: q, price: '', stock: '', barcode: '', expiryDate: '', supplierId: '' });
+    setAddItemNameQuery('');
+    setAddItemSelectedMedicine(null);
+    setAddItemDropdownOpen(!!q);
+    setAddItemHighlight(-1);
+    setAddItemError('');
+    setShowAddItemModal(true);
+  };
+
+  const addItemMedicineSuggestions = useMemo(() => {
+    const q = addItemNameQuery.trim().toLowerCase();
+    if (!q) return medicines.slice(0, 8);
+    return medicines.filter((m) => m.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [medicines, addItemNameQuery]);
+
+  // total rows = suggestions + optional "create new" row
+  const addItemHasCreateRow = addItemNameQuery.trim() &&
+    !addItemMedicineSuggestions.some((m) => m.name.toLowerCase() === addItemNameQuery.trim().toLowerCase());
+  const addItemTotalRows = addItemMedicineSuggestions.length + (addItemHasCreateRow ? 1 : 0);
+
+  const selectAddItemRow = (index) => {
+    if (index < addItemMedicineSuggestions.length) {
+      const m = addItemMedicineSuggestions[index];
+      setAddItemSelectedMedicine({ id: m.id, name: m.name });
+      setAddItemNameQuery(m.name);
+    } else {
+      setAddItemSelectedMedicine(null);
+    }
+    setAddItemDropdownOpen(false);
+    setAddItemHighlight(-1);
+  };
+
+  const handleAddItemNameKeyDown = (e) => {
+    if (!addItemDropdownOpen || addItemTotalRows === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setAddItemHighlight((p) => Math.min(p + 1, addItemTotalRows - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setAddItemHighlight((p) => Math.max(p - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (addItemHighlight >= 0) selectAddItemRow(addItemHighlight);
+    } else if (e.key === 'Escape') {
+      setAddItemDropdownOpen(false);
+    }
+  };
+
+  const handleAddItemSubmit = async (e) => {
+    e.preventDefault();
+    const brandName = addItemForm.brandName.trim();
+    const price = Number(addItemForm.price);
+    const stock = Number(addItemForm.stock) || 0;
+    const newName = addItemNameQuery.trim();
+
+    if (!addItemSelectedMedicine && !newName) { setAddItemError('Item name is required.'); return; }
+    if (!brandName) { setAddItemError('Brand / variant name is required.'); return; }
+    if (!price || price <= 0) { setAddItemError('Price must be greater than zero.'); return; }
+    setAddItemSaving(true);
+    setAddItemError('');
+    try {
+      const brand = {
+        name: brandName,
+        price,
+        stock,
+        barcode: addItemForm.barcode.trim() || null,
+        expiry_date: addItemForm.expiryDate || null,
+        supplier_id: addItemForm.supplierId ? Number(addItemForm.supplierId) : null,
+      };
+      if (addItemSelectedMedicine) {
+        await api.patch(`/medicines/${addItemSelectedMedicine.id}`, { brands: [brand] });
+      } else {
+        await api.post('/medicines', { name: newName, type: ['medicine'], brands: [brand] });
+      }
+      await refreshMedicines();
+      setShowAddItemModal(false);
+      setCatalogSearch('');
+      const itemName = addItemSelectedMedicine ? addItemSelectedMedicine.name : newName;
+      setCatalogHint(`"${itemName} — ${brandName}" added. Select it from the catalog to add to cart.`);
+    } catch (err) {
+      setAddItemError(err?.response?.data?.message || 'Failed to create item.');
+    } finally {
+      setAddItemSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (successMessage) {
@@ -134,7 +252,8 @@ const DirectSalesPage = () => {
           medicineName: medicine.name,
           brandName: brand.name,
           stock: totalStock,
-          image_url: brand.image_url || null
+          image_url: brand.image_url || null,
+          doseSizes: Array.isArray(brand.dose_sizes) ? brand.dose_sizes : []
         });
       });
     });
@@ -172,17 +291,6 @@ const DirectSalesPage = () => {
     return lookup;
   }, [brandOptions]);
 
-  const categories = useMemo(() => {
-    const set = new Set();
-    brandOptions.forEach((option) => {
-      const key = String(option.category || 'other').toLowerCase();
-      if (key) {
-        set.add(key);
-      }
-    });
-
-    return ['all', ...Array.from(set).sort((a, b) => a.localeCompare(b))];
-  }, [brandOptions]);
 
   const cartItems = useMemo(() => {
     return (formState.medicines || [])
@@ -216,16 +324,8 @@ const DirectSalesPage = () => {
   const filteredCatalogOptions = useMemo(() => {
     const query = catalogSearch.trim().toLowerCase();
     const source = Array.isArray(brandOptions) ? brandOptions : [];
-
-    const categoryFiltered = selectedCategory === 'all'
-      ? source
-      : source.filter((option) => String(option.category || 'other').toLowerCase() === selectedCategory);
-
-    if (!query) {
-      return categoryFiltered.slice(0, 48);
-    }
-
-    return categoryFiltered
+    if (!query) return source.slice(0, 48);
+    return source
       .filter((option) => {
         const labelMatch = option.label.toLowerCase().includes(query);
         const barcodeMatch = (option.barcodes || []).some((barcode) =>
@@ -234,7 +334,7 @@ const DirectSalesPage = () => {
         return labelMatch || barcodeMatch;
       })
       .slice(0, 48);
-  }, [brandOptions, catalogSearch, selectedCategory]);
+  }, [brandOptions, catalogSearch]);
 
   const addBrandOptionToSale = useCallback((option, quantityToAdd = 1) => {
     if (!option?.value) {
@@ -338,7 +438,7 @@ const DirectSalesPage = () => {
   // Reset tile highlight when search query changes
   useEffect(() => {
     setHighlightedTileIndex(-1);
-  }, [catalogSearch, selectedCategory]);
+  }, [catalogSearch]);
 
   // Scroll highlighted tile into view
   useEffect(() => {
@@ -428,6 +528,12 @@ const DirectSalesPage = () => {
       const added = addBrandOptionToSale(exactLabelMatch, 1);
       if (added) setCatalogHint(`Added: ${exactLabelMatch.label}`);
       setCatalogSearch('');
+      return;
+    }
+
+    // No match at all → open the add-item modal
+    if (filteredCatalogOptions.length === 0) {
+      openAddItemModal();
       return;
     }
 
@@ -528,6 +634,7 @@ const DirectSalesPage = () => {
   const combinedError = formError || directSalesError || medicinesError;
 
   return (
+    <>
     <section className="mt-0 flex flex-col gap-2 xl:h-[calc(100vh-6.5rem)] xl:-mb-12">
       {/* Removed Quick Sale title and subtitle for more screen space */}
 
@@ -555,31 +662,8 @@ const DirectSalesPage = () => {
         <div className="flex-1 min-h-0 grid gap-2 xl:grid-cols-12">
         <div className="xl:col-span-7 min-h-0 flex flex-col">
           <div className="flex flex-col flex-1 min-h-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex-1 min-h-0 grid gap-3 lg:grid-cols-[140px,1fr]">
-              <aside className="rounded-xl border border-slate-200 bg-slate-50 p-2 overflow-hidden flex flex-col">
-                <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Item Types</p>
-                <div className="flex flex-1 flex-col gap-1 overflow-auto pr-1">
-                  {categories.map((category) => {
-                    const active = selectedCategory === category;
-                    return (
-                      <button
-                        key={category}
-                        type="button"
-                        className={`rounded-lg px-2 py-1.5 text-left text-xs font-medium transition ${
-                          active
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-white text-slate-600 hover:bg-blue-50 hover:text-blue-700'
-                        }`}
-                        onClick={() => setSelectedCategory(category)}
-                      >
-                        {category === 'all' ? 'All' : formatCategoryLabel(category)}
-                      </button>
-                    );
-                  })}
-                </div>
-              </aside>
-
-              <div className="flex flex-col min-h-0 overflow-hidden">
+            <div className="flex-1 min-h-0">
+              <div className="flex flex-col min-h-0 overflow-hidden h-full">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <h2 className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-700">
                     <Tag size={14} /> Products
@@ -587,29 +671,38 @@ const DirectSalesPage = () => {
                   <span className="text-xs text-slate-500">Scan barcode or click a product to add</span>
                 </div>
 
-                <div className="mb-3 relative">
-                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    data-catalog-search
-                    type="text"
-                    className="input input-bordered input-sm w-full pl-9"
-                    placeholder="Search by name or scan barcode (F1)"
-                    value={catalogSearch}
-                    onChange={(event) => {
-                      setCatalogSearch(event.target.value);
-                      if (catalogHint) setCatalogHint('');
-                    }}
-                    onKeyDown={handleCatalogSearchSubmit}
-                  />
-                  {catalogHint && <p className="mt-1 text-xs text-emerald-600">{catalogHint}</p>}
+                <div className="mb-3 space-y-1">
+                  <div className="relative">
+                    <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      data-catalog-search
+                      type="text"
+                      className="input input-bordered input-sm w-full pl-9"
+                      placeholder="Search by name or scan barcode (F1)"
+                      value={catalogSearch}
+                      onChange={(event) => {
+                        setCatalogSearch(event.target.value);
+                        if (catalogHint) setCatalogHint('');
+                      }}
+                      onKeyDown={handleCatalogSearchSubmit}
+                    />
+                  </div>
+                  {catalogHint && <p className="text-xs text-emerald-600">{catalogHint}</p>}
                 </div>
 
                 {filteredCatalogOptions.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                    No products found. Try a different search or scan.
+                  <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+                    <p className="text-sm text-slate-500">No products found{catalogSearch.trim() ? ` for "${catalogSearch.trim()}"` : ''}.</p>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                      onClick={openAddItemModal}
+                    >
+                      <Plus size={13} /> Add new item
+                    </button>
                   </div>
                 ) : (
-                  <div ref={tilesGridRef} className="grid flex-1 gap-2 overflow-auto pr-1 sm:grid-cols-2 lg:grid-cols-3" style={{minHeight: 0, maxHeight: '100%'}}>
+                  <div ref={tilesGridRef} className="grid auto-rows-[160px] gap-2 overflow-auto pr-1 sm:grid-cols-2 lg:grid-cols-3" style={{minHeight: 0, maxHeight: '100%'}}>
                     {filteredCatalogOptions.map((option, index) => {
                       const stockQty = Number(option.stock) || 0;
                       const isHighlighted = highlightedTileIndex === index;
@@ -632,21 +725,22 @@ const DirectSalesPage = () => {
                           }}
                           disabled={stockQty <= 0}
                         >
-                          <div className={option.image_url ? 'pr-16' : ''}>
-                            <div className="mb-1 flex items-start justify-between gap-2">
-                              <p className="line-clamp-2 text-sm font-semibold text-slate-800">{option.medicineName}</p>
-                              <span className="text-xs font-semibold text-amber-600">{currencyFormatter.format(option.price)}</span>
+                          <div className="pr-16">
+                            <div className="mb-1">
+                              <p className="line-clamp-2 min-w-0 text-sm font-semibold text-slate-800">{option.medicineName}</p>
                             </div>
                             <p className="text-xs text-slate-600">{option.brandName}</p>
                             <p className="mt-1 text-[11px] text-slate-500">{option.barcode ? `Barcode: ${option.barcode}` : 'No barcode'}</p>
                             <p className="mt-1 text-[11px] font-medium text-slate-600">Stock: {stockQty}</p>
                             {stockQty <= 0 && <p className="mt-1 text-[11px] font-semibold text-rose-700">Out of stock</p>}
+                            <p className="mt-1 text-sm font-bold text-emerald-600">{currencyFormatter.format(option.price)}</p>
                           </div>
-                          {option.image_url && (
-                            <div className="absolute bottom-3 right-3 h-14 w-14 overflow-hidden rounded border border-slate-200 bg-slate-100">
-                              <img src={option.image_url} alt={`${option.medicineName} - ${option.brandName}`} className="h-full w-full object-cover" />
-                            </div>
-                          )}
+                          <div className={`absolute bottom-3 right-3 h-14 w-14 overflow-hidden rounded border border-slate-200 flex items-center justify-center ${option.image_url ? 'bg-slate-100' : getLetterColor(option.medicineName).bg}`}>
+                            {option.image_url
+                              ? <img src={option.image_url} alt={`${option.medicineName} - ${option.brandName}`} className="h-full w-full object-cover" />
+                              : <Package size={22} className={getLetterColor(option.medicineName).icon} />
+                            }
+                          </div>
                         </button>
                       );
                     })}
@@ -733,7 +827,7 @@ const DirectSalesPage = () => {
         <div className="shrink-0">
           <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
             <div className="flex flex-wrap items-end gap-3">
-              <label className="form-control w-36 shrink-0">
+              <label className="form-control w-24 shrink-0">
                 <span className="label-text text-[10px] font-semibold uppercase tracking-wide text-slate-400">Discount (%)</span>
                 <input
                   type="number"
@@ -748,7 +842,7 @@ const DirectSalesPage = () => {
               </label>
 
               {settings.shop_type === 'spare' ? (
-                <label className="form-control w-36 shrink-0">
+                <label className="form-control w-24 shrink-0">
                   <span className="label-text text-[10px] font-semibold uppercase tracking-wide text-slate-400">Extra Charge</span>
                   <input
                     type="number"
@@ -762,7 +856,7 @@ const DirectSalesPage = () => {
                 </label>
               ) : null}
 
-              <label className="form-control w-36 shrink-0">
+              <label className="form-control w-24 shrink-0">
                 <span className="label-text text-[10px] font-semibold uppercase tracking-wide text-slate-400">Payment</span>
                 <select
                   className="select select-bordered select-sm"
@@ -781,7 +875,7 @@ const DirectSalesPage = () => {
                 </select>
               </label>
 
-              <label className="form-control w-36 shrink-0">
+              <label className="form-control w-24 shrink-0">
                 <span className="label-text text-[10px] font-semibold uppercase tracking-wide text-slate-400">Status</span>
                 <select
                   className="select select-bordered select-sm"
@@ -834,7 +928,7 @@ const DirectSalesPage = () => {
                 </div>
                 <div className="rounded-lg bg-amber-500 px-3 py-1.5">
                   <p className="text-[9px] font-semibold uppercase tracking-wide text-amber-100">Discount</p>
-                  <p className="text-xs font-bold text-white">-{currencyFormatter.format(discountAmount)}</p>
+                  <p className="text-xs font-bold text-white">{currencyFormatter.format(discountAmount)}</p>
                 </div>
                 {settings.shop_type === 'spare' && (
                   <div className="rounded-lg bg-slate-700 px-3 py-1.5">
@@ -848,22 +942,25 @@ const DirectSalesPage = () => {
                 </div>
 
                 <div className="ml-auto flex items-center gap-2">
+                  <button type="submit" data-direct-sale-submit className="btn btn-primary gap-2 rounded-xl px-6 h-auto py-2" disabled={isSaving}>
+                    {isSaving ? (
+                      <><span className="loading loading-spinner loading-sm"></span> Completing...</>
+                    ) : (
+                      <div className="flex flex-col items-center leading-tight">
+                        <span className="inline-flex items-center gap-1.5 text-sm font-bold"><Receipt size={14} /> Complete Sale</span>
+                        <span className="text-sm font-semibold opacity-90">{currencyFormatter.format(finalTotal)}</span>
+                      </div>
+                    )}
+                  </button>
                   {cartItems.length > 0 && (
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1.5 btn btn-sm rounded-xl border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
+                      className="inline-flex items-center gap-1.5 btn rounded-xl border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
                       onClick={() => handleChange('medicines', [])}
                     >
-                      <Trash2 size={13} /> Clear cart
+                      <Trash2 size={15} /> Clear cart
                     </button>
                   )}
-                  <button type="submit" data-direct-sale-submit className="btn btn-primary btn-sm gap-2 rounded-xl px-6" disabled={isSaving}>
-                    {isSaving ? (
-                      <><span className="loading loading-spinner loading-xs"></span> Completing...</>
-                    ) : (
-                      <><Receipt size={13} /> Complete Sale</>
-                    )}
-                  </button>
                 </div>
               </div>
             </div>
@@ -872,6 +969,170 @@ const DirectSalesPage = () => {
       </form>
 
     </section>
+
+    {showAddItemModal && createPortal(
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      >
+        <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
+            <h2 className="text-sm font-semibold text-slate-800">Add new item</h2>
+            <button type="button" onClick={() => setShowAddItemModal(false)}
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-100">
+              <X size={14} />
+            </button>
+          </div>
+          <form className="p-5 space-y-3" onSubmit={handleAddItemSubmit}>
+            {addItemError && (
+              <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{addItemError}</p>
+            )}
+
+            {/* Item name with searchable dropdown */}
+            <div>
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Item name *</span>
+              <div className="relative">
+                <input
+                  ref={addItemNameRef}
+                  type="text"
+                  className="input input-bordered input-sm w-full pr-16"
+                  value={addItemSelectedMedicine ? addItemSelectedMedicine.name : addItemNameQuery}
+                  onChange={(e) => {
+                    setAddItemSelectedMedicine(null);
+                    setAddItemNameQuery(e.target.value);
+                    setAddItemHighlight(-1);
+                    setAddItemDropdownOpen(true);
+                  }}
+                  onFocus={() => setAddItemDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setAddItemDropdownOpen(false), 150)}
+                  onKeyDown={handleAddItemNameKeyDown}
+                  placeholder="Search or type new item name…"
+                  autoFocus
+                />
+                {addItemSelectedMedicine && (
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">existing</span>
+                )}
+                {addItemDropdownOpen && addItemTotalRows > 0 && (
+                  <ul className="absolute z-10 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden max-h-52 overflow-y-auto">
+                    {addItemMedicineSuggestions.map((m, idx) => (
+                      <li key={m.id}>
+                        <button
+                          type="button"
+                          className={`w-full px-3 py-2 text-left text-sm text-slate-700 ${addItemHighlight === idx ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+                          onMouseEnter={() => setAddItemHighlight(idx)}
+                          onMouseDown={() => selectAddItemRow(idx)}
+                        >
+                          {m.name}
+                          <span className="ml-2 text-[10px] text-slate-400">{m.brands?.length || 0} variant(s)</span>
+                        </button>
+                      </li>
+                    ))}
+                    {addItemHasCreateRow && (
+                      <li>
+                        <button
+                          type="button"
+                          className={`w-full px-3 py-2 text-left text-sm font-semibold text-blue-700 border-t border-slate-100 ${addItemHighlight === addItemMedicineSuggestions.length ? 'bg-blue-50' : 'hover:bg-blue-50'}`}
+                          onMouseEnter={() => setAddItemHighlight(addItemMedicineSuggestions.length)}
+                          onMouseDown={() => selectAddItemRow(addItemMedicineSuggestions.length)}
+                        >
+                          + Create new: &ldquo;{addItemNameQuery.trim()}&rdquo;
+                        </button>
+                      </li>
+                    )}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            {/* Brand / variant */}
+            <label className="block">
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Brand / variant *</span>
+              <input
+                type="text"
+                className="input input-bordered input-sm w-full"
+                value={addItemForm.brandName}
+                onChange={(e) => setAddItemForm((p) => ({ ...p, brandName: e.target.value }))}
+                placeholder="e.g. 250mg Capsule"
+              />
+            </label>
+
+            {/* Price + Stock */}
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Price *</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="input input-bordered input-sm w-full"
+                  value={addItemForm.price}
+                  onChange={(e) => setAddItemForm((p) => ({ ...p, price: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Stock qty</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  className="input input-bordered input-sm w-full"
+                  value={addItemForm.stock}
+                  onChange={(e) => setAddItemForm((p) => ({ ...p, stock: e.target.value }))}
+                  placeholder="0"
+                />
+              </label>
+            </div>
+
+            {/* Barcode + Expiry */}
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Barcode</span>
+                <input
+                  type="text"
+                  className="input input-bordered input-sm w-full"
+                  value={addItemForm.barcode}
+                  onChange={(e) => setAddItemForm((p) => ({ ...p, barcode: e.target.value }))}
+                  placeholder="Optional"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Expiry date</span>
+                <input
+                  type="date"
+                  className="input input-bordered input-sm w-full"
+                  value={addItemForm.expiryDate}
+                  onChange={(e) => setAddItemForm((p) => ({ ...p, expiryDate: e.target.value }))}
+                />
+              </label>
+            </div>
+
+            {/* Supplier */}
+            <label className="block">
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Supplier</span>
+              <select
+                className="select select-bordered select-sm w-full"
+                value={addItemForm.supplierId}
+                onChange={(e) => setAddItemForm((p) => ({ ...p, supplierId: e.target.value }))}
+              >
+                <option value="">— None —</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </label>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" className="btn btn-sm btn-ghost" onClick={() => setShowAddItemModal(false)}>Cancel</button>
+              <button type="submit" className="btn btn-sm btn-primary" disabled={addItemSaving}>
+                {addItemSaving ? <><span className="loading loading-spinner loading-xs" /> Saving…</> : <><Plus size={13} /> Add item</>}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>,
+      document.body
+    )}
+    </>
   );
 };
 

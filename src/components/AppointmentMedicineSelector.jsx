@@ -2,10 +2,6 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 
 const currencyFormatter = new Intl.NumberFormat('en-LK', { style: 'currency', currency: 'LKR' });
-const plainNumberFormatter = new Intl.NumberFormat('en-LK', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2
-});
 const defaultOverlayStyle = { left: 0, top: 0, width: 0, openUpward: false };
 
 const DropdownPortal = ({ children, style }) => {
@@ -276,11 +272,15 @@ const AppointmentMedicineSelector = React.forwardRef(function AppointmentMedicin
   };
 
   const handleSelectOption = (index, option) => {
-    // Determine default quantity based on medicine type
-    const labelLower = (option.label || '').toLowerCase();
-    const isVaccine = labelLower.includes('vaccine');
-    const isMeasuredInMl = labelLower.includes(' ml') || labelLower.includes('ml ');
-    const defaultQuantity = (isVaccine || isMeasuredInMl) ? '0.5' : '1';
+    let defaultQuantity;
+    if (Array.isArray(option.doseSizes) && option.doseSizes.length > 0) {
+      defaultQuantity = String(option.doseSizes[0]);
+    } else {
+      const labelLower = (option.label || '').toLowerCase();
+      const isVaccine = labelLower.includes('vaccine');
+      const isMeasuredInMl = labelLower.includes(' ml') || labelLower.includes('ml ');
+      defaultQuantity = (isVaccine || isMeasuredInMl) ? '0.5' : '1';
+    }
 
     handleUpdateRow(index, {
       medicineBrandId: option.value,
@@ -323,20 +323,29 @@ const AppointmentMedicineSelector = React.forwardRef(function AppointmentMedicin
     setHighlightedOptionIndex(-1);
   };
 
+  const isFractional = quantityStep !== '1';
+
   return (
     <div className="rounded-xl border border-base-200 bg-white p-2">
       <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-medium text-slate-600">Item dispensed</p>
-        {!hideAddButton && (
-          <button
-            type="button"
-            className="btn btn-xs btn-outline"
-            onClick={handleAddRow}
-            disabled={!hasBrandOptions || loading}
-          >
-            {addButtonLabel}
-          </button>
-        )}
+        <p className="text-xs font-medium text-slate-600">Items dispensed</p>
+        <div className="flex items-center gap-2">
+          {rowsWithComputed.length > 0 && brandOptions.length > 0 && (
+            <span className="text-xs font-semibold text-slate-500">
+              Subtotal: {currencyFormatter.format(medicinesTotal)}
+            </span>
+          )}
+          {!hideAddButton && (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition disabled:opacity-40"
+              onClick={handleAddRow}
+              disabled={!hasBrandOptions || loading}
+            >
+              + {addButtonLabel}
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -344,182 +353,170 @@ const AppointmentMedicineSelector = React.forwardRef(function AppointmentMedicin
           Loading available medicines…
         </div>
       ) : rowsWithComputed.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-base-300 bg-white px-3 py-2 text-xs text-slate-500">
+        <div className="rounded-lg border border-dashed border-base-300 bg-white px-3 py-2 text-xs text-slate-400 text-center">
           {hasBrandOptions
-            ? 'No medicines selected for this appointment.'
+            ? 'No medicines added yet — click + to add.'
             : 'No medicines configured yet. Head to the Medicines tab to add inventory.'}
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="table table-sm">
-            <thead>
-              <tr className="text-xs uppercase text-slate-500">
-                <th className="text-left w-2/5">Brand</th>
-                <th className="text-left">Scale</th>
-                <th className="text-right">Unit price</th>
-                <th className="w-28 text-right">Quantity</th>
-                <th className="text-right">Line total</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rowsWithComputed.map((row, index) => (
-                <tr key={`${row.medicineBrandId || 'new'}-${index}`}>
-                  <td className="align-top">
-                    {lockBrandSelection ? (
-                      <div className="flex gap-2 items-start">
-                        {row.option?.image_url && (
-                          <div className="flex-shrink-0 w-10 h-10 bg-base-200 rounded border border-base-300 overflow-hidden">
-                            <img
-                              src={row.option.image_url}
-                              alt={row.option?.label}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        )}
-                        <span className="text-sm font-medium text-slate-700">
-                          {row.option?.label || row.label || '—'}
-                          {row.option ? ` {${plainNumberFormatter.format(row.unitPrice)}}` : ''}
+        <div className="space-y-1.5">
+          {rowsWithComputed.map((row, index) => (
+            <div key={`${row.medicineBrandId || 'new'}-${index}`} className="rounded-lg border border-slate-100 bg-slate-50 p-1.5">
+              {/* Top row: search/name + qty controls + total + delete */}
+              <div className="flex items-center gap-2">
+                {/* Medicine name / search */}
+                <div className="relative min-w-0 flex-1">
+                  {lockBrandSelection ? (
+                    <div>
+                      <span className="text-xs font-semibold text-slate-800">
+                        {row.option?.label || row.label || '—'}
+                      </span>
+                      {row.option && (
+                        <span className="ml-1.5 text-[11px] text-slate-400">
+                          {currencyFormatter.format(row.unitPrice)} each
                         </span>
-                      </div>
-                    ) : (
-                      <div className="relative">
-                        {!hasBrandOptions && !row.label && (
-                          <p className="mb-2 text-[11px] uppercase tracking-wide text-warning">
-                            Brand catalog unavailable — add inventory first.
-                          </p>
-                        )}
-                        <input
-                          type="text"
-                          ref={(element) => {
-                            inputRefs.current[index] = element;
-                          }}
-                          className="input input-bordered input-sm w-full pr-12"
-                          placeholder={
-                            hasBrandOptions ? 'Search medicine brands' : 'No brands available'
-                          }
-                          value={row.query || ''}
-                          onFocus={() => focusRow(index)}
-                          onBlur={scheduleBlur}
-                          onChange={(event) => handleSearchChange(index, event.target.value)}
-                          onKeyDown={(event) => handleInputKeyDown(event, index, row)}
-                          readOnly={!hasBrandOptions && Boolean(row.label)}
-                          disabled={!hasBrandOptions && !row.label}
-                        />
-                        {activeIndex === index && hasBrandOptions && overlayStyle.width > 0 && (
-                          <DropdownPortal style={overlayStyle}>
-                            {row.filteredOptions.map((option, optIdx) => {
-                              const isSelected = option.value === row.medicineBrandId;
-                              const isHighlighted = optIdx === highlightedOptionIndex;
-                              return (
-                                <li key={option.value}>
-                                  <button
-                                    type="button"
-                                    className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition ${
-                                      isHighlighted ? 'bg-base-300 text-base-content' : isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-base-200'
-                                    }`}
-                                    onMouseDown={(event) => event.preventDefault()}
-                                    onMouseEnter={() => setHighlightedOptionIndex(optIdx)}
-                                    onClick={() => { handleSelectOption(index, option); setHighlightedOptionIndex(-1); }}
-                                  >
-                                    <span className="flex-1">{option.label}</span>
-                                    <span className="text-xs text-slate-500">
-                                      {Number.isFinite(option.price)
-                                        ? currencyFormatter.format(
-                                        (Number(option.price) || 0) / (Number(option.conversion) || 1)
-                                      )
-                                        : '—'}
-                                    </span>
-                                  </button>
-                                </li>
-                              );
-                            })}
-                            {row.filteredOptions.length === 0 && (
-                              <li className="px-3 py-2 text-sm text-slate-500">No matches found.</li>
-                            )}
-                          </DropdownPortal>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                  <td className="text-left align-top text-sm text-slate-600">
-                    {row.option ? (
-                      <div>
-                        <span>{row.option.scale || '—'}</span>
-                        {row.option.conversion > 1 && (
-                          <div className="text-xs text-slate-400 font-normal">
-                            (1 to {row.option.conversion})
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td className="text-right text-sm text-slate-600">
-                    {row.option ? (
-                      <div>
-                        <span>{currencyFormatter.format(row.unitPrice)}</span>
-                        {row.originalUnitPrice !== row.unitPrice && (
-                          <div className="text-xs text-slate-400 font-normal">
-                            (was {currencyFormatter.format(row.originalUnitPrice)})
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td className="text-right">
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        ref={(element) => { inputRefs.current[index] = element; }}
+                        className="input input-sm input-bordered w-full bg-white text-sm"
+                        placeholder={hasBrandOptions ? 'Search medicine…' : 'No brands available'}
+                        value={row.query || ''}
+                        onFocus={() => focusRow(index)}
+                        onBlur={scheduleBlur}
+                        onChange={(event) => handleSearchChange(index, event.target.value)}
+                        onKeyDown={(event) => handleInputKeyDown(event, index, row)}
+                        readOnly={!hasBrandOptions && Boolean(row.label)}
+                        disabled={!hasBrandOptions && !row.label}
+                      />
+                      {activeIndex === index && hasBrandOptions && overlayStyle.width > 0 && (
+                        <DropdownPortal style={overlayStyle}>
+                          {row.filteredOptions.map((option, optIdx) => {
+                            const isSelected = option.value === row.medicineBrandId;
+                            const isHighlighted = optIdx === highlightedOptionIndex;
+                            return (
+                              <li key={option.value}>
+                                <button
+                                  type="button"
+                                  className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition ${
+                                    isHighlighted ? 'bg-base-300 text-base-content' : isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-base-200'
+                                  }`}
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onMouseEnter={() => setHighlightedOptionIndex(optIdx)}
+                                  onClick={() => { handleSelectOption(index, option); setHighlightedOptionIndex(-1); }}
+                                >
+                                  <span className="flex-1">{option.label}</span>
+                                  <span className="text-xs text-slate-500">
+                                    {Number.isFinite(option.price)
+                                      ? currencyFormatter.format((Number(option.price) || 0) / (Number(option.conversion) || 1))
+                                      : '—'}
+                                  </span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                          {row.filteredOptions.length === 0 && (
+                            <li className="px-3 py-2 text-sm text-slate-500">No matches found.</li>
+                          )}
+                        </DropdownPortal>
+                      )}
+                    </>
+                  )}
+                  {row.option && (
+                    <div className="mt-0.5 text-[11px] text-slate-400">
+                      {currencyFormatter.format(row.unitPrice)} each
+                      {row.option.scale && row.option.scale !== 'unit' && (
+                        <span className="ml-1.5 rounded bg-slate-100 px-1 py-0.5 font-medium text-slate-500">{row.option.scale}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Quantity controls */}
+                <div className="flex shrink-0 items-center gap-1">
+                  {isFractional ? (
                     <input
                       type="number"
                       min={quantityMin}
                       step={quantityStep}
-                      className="input input-xs w-12 text-right text-xs"
+                      className="input input-sm w-16 text-center text-sm font-medium"
                       value={row.quantity || ''}
                       onChange={(event) => handleUpdateRow(index, { quantity: event.target.value })}
                     />
-                  </td>
-                  <td className="text-right text-sm font-medium text-slate-700">
-                    {row.option && row.quantity > 0
-                      ? currencyFormatter.format(row.totalPrice)
-                      : '—'}
-                  </td>
-                  <td className="text-right">
-                    <button
-                      type="button"
-                      className="btn btn-xs btn-ghost text-error"
-                      onClick={() => handleRemoveRow(index)}
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="h-4 w-4"
-                        aria-hidden="true"
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="flex h-5 w-5 items-center justify-center rounded border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-100 transition disabled:opacity-30"
+                        onClick={() => {
+                          const current = Number.parseFloat(row.quantity) || 0;
+                          if (current > 1) handleUpdateRow(index, { quantity: String(current - 1) });
+                        }}
+                        disabled={Number.parseFloat(row.quantity) <= 1}
                       >
-                        <path d="M3 6h18" />
-                        <path d="M8 6v12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6" />
-                        <path d="M10 6V4a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v2" />
-                        <path d="M10 11v6" />
-                        <path d="M14 11v6" />
-                      </svg>
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                        −
+                      </button>
+                      <span className="min-w-[1.5rem] text-center text-xs font-semibold text-slate-700">
+                        {row.quantity || 0}
+                      </span>
+                      <button
+                        type="button"
+                        className="flex h-5 w-5 items-center justify-center rounded border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-100 transition"
+                        onClick={() => {
+                          const current = Number.parseFloat(row.quantity) || 0;
+                          handleUpdateRow(index, { quantity: String(current + 1) });
+                        }}
+                      >
+                        +
+                      </button>
+                    </>
+                  )}
+                </div>
 
-      {rowsWithComputed.length > 0 && brandOptions.length > 0 && (
-        <div className="mt-1.5 flex justify-end text-xs font-semibold text-slate-600">
-          Subtotal: {currencyFormatter.format(medicinesTotal)}
+                {/* Line total */}
+                <span className="shrink-0 w-20 text-right text-xs font-semibold text-slate-700">
+                  {row.option && row.quantity > 0 ? currencyFormatter.format(row.totalPrice) : '—'}
+                </span>
+
+                {/* Delete */}
+                <button
+                  type="button"
+                  className="shrink-0 flex h-5 w-5 items-center justify-center rounded text-slate-300 hover:bg-rose-50 hover:text-rose-500 transition"
+                  onClick={() => handleRemoveRow(index)}
+                  aria-label="Remove"
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Dose chips */}
+              {row.option && Array.isArray(row.option.doseSizes) && row.option.doseSizes.length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {row.option.doseSizes.map((size, idx) => {
+                    const sizeLabel = `${size}${row.option.scale && row.option.scale !== 'unit' ? row.option.scale : ''}`;
+                    const isActive = String(row.quantity) === String(size);
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold transition ${
+                          isActive
+                            ? 'border-blue-500 bg-blue-600 text-white'
+                            : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                        }`}
+                        onClick={() => handleUpdateRow(index, { quantity: String(size) })}
+                      >
+                        {sizeLabel}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

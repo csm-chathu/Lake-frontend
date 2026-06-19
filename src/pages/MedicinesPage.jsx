@@ -45,6 +45,7 @@ const createEmptyBrand = () => ({
   conversion: 1,
   unit_cost: '',
   scale: 'ml',
+  dose_sizes: [],
   batches: [createEmptyBatch()]
 });
 
@@ -416,6 +417,7 @@ const MedicinesPage = () => {
           conversion: brand.conversion || 1,
           unit_cost: Number(brand.unit_cost) || 0,
           scale: brand.scale || 'ml',
+          dose_sizes: Array.isArray(brand.dose_sizes) ? brand.dose_sizes : [],
           batches: normalizedBatches
         };
       });
@@ -484,6 +486,7 @@ const MedicinesPage = () => {
                   ? Number(brand.unit_cost).toFixed(2)
                   : '',
               scale: brand.scale || 'ml',
+              dose_sizes: Array.isArray(brand.dose_sizes) ? brand.dose_sizes : [],
               batches:
                 Array.isArray(brand.batches) && brand.batches.length
                   ? brand.batches.map((batch) => ({

@@ -1,10 +1,12 @@
 import axios from 'axios';
 
-const client = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api',
-  // baseURL: import.meta.env.VITE_API_BASE_URL || 'https://pos-api.lmuc-innovations.com/api',
-  timeout: 60000
-});
+// In Electron the preload exposes window.electronAPI; in a browser it is absent.
+const isElectron = typeof window !== 'undefined' && Boolean(window.electronAPI);
+const baseURL = isElectron
+  ? 'http://127.0.0.1:8000/api'
+  : 'https://vet.lumac.lk/api';
+
+const client = axios.create({ baseURL, timeout: 60000 });
 // Attach auth token from localStorage on each request
 client.interceptors.request.use((config) => {
   try {

@@ -123,7 +123,9 @@ const QuickPatientRegistrationCard = ({
   onPatientUpdated = () => {},
   onFormChange = null,           // called with latest internal form state
   hideActions = false,           // if true, do not render save/clear buttons
-  onViewPatientInfo = null
+  hideNameField = false,         // if true, name is provided inline by parent (PatientSearch)
+  onViewPatientInfo = null,
+  stacked = false,               // if true, renders 4 vertical rows instead of wide horizontal rows
 }) => {
   const { settings } = useClinicSettings();
   const [form, setForm] = useState(() => createEmptyForm(owners, null, initialValues));
@@ -133,6 +135,9 @@ const QuickPatientRegistrationCard = ({
   const [success, setSuccess] = useState('');
   const [passbookPreview, setPassbookPreview] = useState(() => normalizePassbookValue(passbookProp));
   const [passbookLoading] = useState(false); // no loading now, value comes from parent
+  const [showSpeciesInput, setShowSpeciesInput] = useState(
+    () => !!(initialValues?.species && initialValues.species !== 'Canine' && initialValues.species !== 'Feline')
+  );
   const patientNameTouchedRef = useRef(false);
   const canUpdateExisting = Boolean(initialValues?.id);
 
@@ -234,6 +239,10 @@ const QuickPatientRegistrationCard = ({
     if (field === 'patientName') {
       patientNameTouchedRef.current = true;
     }
+    if (field === 'ageMonths' && value !== '') {
+      const n = Number(value);
+      if (!Number.isNaN(n) && n > 11) value = '11';
+    }
     setForm((prev) => {
       let next = { ...prev, [field]: value };
       
@@ -257,17 +266,29 @@ const QuickPatientRegistrationCard = ({
           }
           setOwnerSearch(WALKING_OWNER_LABEL);
         } else {
-          next = {
-            ...next,
-            ownerFirstName: '',
-            existingOwnerId: '',
-            ownerPhone: '',
-            ownerEmail: ''
-          };
-          setOwnerSearch('');
+          // Restore the original patient's owner if one was selected before Walk was checked
+          if (initialOwner) {
+            next = {
+              ...next,
+              ownerFirstName: '',
+              existingOwnerId: String(initialOwner.id || ''),
+              ownerPhone: initialOwner.phone || '',
+              ownerEmail: initialOwner.email || ''
+            };
+            setOwnerSearch(ownerLabel(initialOwner));
+          } else {
+            next = {
+              ...next,
+              ownerFirstName: '',
+              existingOwnerId: '',
+              ownerPhone: '',
+              ownerEmail: ''
+            };
+            setOwnerSearch('');
+          }
         }
       }
-      
+
       if (typeof onFormChange === 'function') {
         onFormChange(next);
       }
@@ -275,7 +296,7 @@ const QuickPatientRegistrationCard = ({
     });
     setError('');
     setSuccess('');
-  }, [onFormChange, owners]);
+  }, [onFormChange, owners, initialOwner, ownerLabel]);
 
 
   const handleReset = useCallback(() => {
@@ -628,142 +649,389 @@ const QuickPatientRegistrationCard = ({
 
 
   const isOther = form.species !== 'Canine' && form.species !== 'Feline';
-  const inputSm = 'input input-sm input-bordered w-full bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100';
+  const inputXs = 'input input-sm input-bordered bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100';
 
-  return (
-    <div className="space-y-2.5">
-      {error && (
-        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-          {success}
-        </div>
-      )}
+  // ── STACKED layout for narrow columns ───────────────────────────────────
+  if (stacked) {
+    return (
+      <div className="space-y-1.5">
+        {error && (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs text-rose-700">{error}</div>
+        )}
+        {success && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700">{success}</div>
+        )}
 
-      {/* ── Row 1: Patient identity ── */}
-      <div className="flex flex-wrap items-end gap-2">
-
-        {/* Patient name */}
-        <div className="flex flex-col gap-1 min-w-[120px] flex-1">
-          <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-            Patient name <span className="text-rose-400">*</span>
-          </label>
+        {/* Row 1: Name */}
+        {!hideNameField && (
           <input
             type="text"
-            className={inputSm}
+            className={`${inputXs} w-full`}
             value={form.patientName}
             onChange={(e) => handleInputChange('patientName', capitalizeFirstLetter(e.target.value))}
-            placeholder="Name"
+            placeholder="Patient name *"
           />
-        </div>
+        )}
 
-        {/* Species — pill toggle */}
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Species</label>
-          <div className="flex items-center gap-1">
-            <div className="flex overflow-hidden rounded-lg border border-slate-200">
-              {['Canine', 'Feline', 'Other'].map((s, i) => {
-                const active = s === 'Other' ? isOther : form.species === s;
+        {/* Row 2: Sex + Species — 2-column grid so each group has its own space */}
+        <div className="grid grid-cols-2 gap-2">
+          {/* Sex */}
+          <div className="space-y-1">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Sex</span>
+            <div className="flex w-full overflow-hidden rounded-lg border border-slate-200">
+              {[['male','Male'],['female','Female']].map(([val, lbl], i) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => handleInputChange('gender', val)}
+                  className={`flex-1 py-2 text-xs font-semibold transition ${i === 0 ? 'border-r border-slate-200' : ''} ${
+                    form.gender === val ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Species */}
+          <div className="space-y-1">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Species</span>
+            <div className="flex w-full overflow-hidden rounded-lg border border-slate-200">
+              {[['Canine','Dog'],['Feline','Cat'],['Other','…']].map(([val, lbl], i) => {
+                const active = val === 'Other' ? showSpeciesInput : form.species === val;
                 return (
                   <button
-                    key={s}
+                    key={val}
                     type="button"
-                    onClick={() => handleInputChange('species', s === 'Other' ? '' : s)}
-                    className={`px-2.5 py-1.5 text-xs font-semibold transition ${i < 2 ? 'border-r border-slate-200' : ''} ${
-                      active ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                    onClick={() => {
+                      if (val === 'Other') {
+                        setShowSpeciesInput(true);
+                        if (form.species === 'Canine' || form.species === 'Feline') {
+                          handleInputChange('species', '');
+                        }
+                      } else {
+                        setShowSpeciesInput(false);
+                        handleInputChange('species', val);
+                      }
+                    }}
+                    className={`flex-1 py-2 text-xs font-semibold transition ${i < 2 ? 'border-r border-slate-200' : ''} ${
+                      active ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'
                     }`}
                   >
-                    {s}
+                    {lbl}
                   </button>
                 );
               })}
             </div>
-            {isOther && (
-              <input
-                type="text"
-                className="input input-sm input-bordered w-24 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                value={form.species}
-                onChange={(e) => handleInputChange('species', capitalizeFirstLetter(e.target.value))}
-                placeholder="Species…"
-                autoFocus
-              />
-            )}
           </div>
         </div>
 
-        {/* Breed */}
-        <div className="flex flex-col gap-1 w-28">
-          <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Breed</label>
+        {/* Species custom name — only when "…" is selected */}
+        {showSpeciesInput && (
           <input
             type="text"
-            list={BREED_DATALIST_ID}
-            className={inputSm}
-            value={form.breed}
-            onChange={(e) => handleInputChange('breed', capitalizeFirstLetter(e.target.value))}
-            placeholder="Breed"
+            className={`${inputXs} w-full`}
+            value={form.species}
+            onChange={(e) => handleInputChange('species', capitalizeFirstLetter(e.target.value))}
+            placeholder="Species name"
+            autoFocus
           />
-          <datalist id={BREED_DATALIST_ID}>
-            {DEFAULT_BREEDS.map((opt) => <option key={opt} value={opt} />)}
-          </datalist>
+        )}
+
+        {/* Row 3: Breed — full width */}
+        <input
+          type="text"
+          list={BREED_DATALIST_ID}
+          className={`${inputXs} w-full`}
+          value={form.breed}
+          onChange={(e) => handleInputChange('breed', capitalizeFirstLetter(e.target.value))}
+          placeholder="Breed"
+        />
+        <datalist id={BREED_DATALIST_ID}>
+          {DEFAULT_BREEDS.map((opt) => <option key={opt} value={opt} />)}
+        </datalist>
+
+        {/* Row 4: Age + Weight in a 2-column grid */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Age</span>
+            <div className="flex gap-1.5">
+              <input
+                type="number" min="0" max="30"
+                className={`${inputXs} flex-1 min-w-0 text-center`}
+                value={form.ageYears}
+                onChange={(e) => handleInputChange('ageYears', e.target.value)}
+                placeholder="Years"
+              />
+              <input
+                type="number" min="0" max="11"
+                className={`${inputXs} flex-1 min-w-0 text-center`}
+                value={form.ageMonths}
+                onChange={(e) => handleInputChange('ageMonths', e.target.value)}
+                placeholder="Months"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Weight</span>
+            <input
+              type="number" min="0" step="0.1"
+              className={`${inputXs} w-full text-center`}
+              value={form.weight}
+              onChange={(e) => handleInputChange('weight', e.target.value)}
+              placeholder="Kg"
+            />
+          </div>
         </div>
 
-        {/* Gender — M / F pill toggle */}
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Sex</label>
-          <div className="flex overflow-hidden rounded-lg border border-slate-200">
-            {[['male','M'],['female','F']].map(([val, lbl], i) => (
+        {/* Owner — line 1: Walk toggle + owner name */}
+        <div className="relative flex items-center gap-1.5">
+          <label className="flex shrink-0 cursor-pointer items-center gap-1">
+            <input
+              type="checkbox"
+              className="h-3 w-3 rounded border-amber-400 accent-amber-500"
+              checked={form.isWalkingPatient}
+              onChange={(e) => handleInputChange('isWalkingPatient', e.target.checked)}
+            />
+            <span className="text-[10px] font-semibold text-amber-600">Walk</span>
+          </label>
+          <div className="relative flex-1 min-w-0">
+            <input
+              type="text"
+              value={ownerSearch}
+              onChange={(e) => {
+                if (!form.isWalkingPatient) {
+                  const capitalized = capitalizeFirstLetter(e.target.value);
+                  setOwnerSearch(capitalized);
+                  setForm((prev) => ({ ...prev, existingOwnerId: '', ownerFirstName: capitalized }));
+                }
+              }}
+              placeholder="Owner name *"
+              className={`input input-sm input-bordered w-full text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-100 ${
+                form.existingOwnerId || form.isWalkingPatient ? 'cursor-not-allowed bg-slate-100' : 'bg-white'
+              }`}
+              readOnly={!!form.existingOwnerId || form.isWalkingPatient}
+            />
+            {ownerSearch && filteredOwners.length > 0 && !form.existingOwnerId && !form.isWalkingPatient && (
+              <ul className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                {filteredOwners.slice(0, 5).map((owner) => (
+                  <li key={owner.id}>
+                    <button
+                      type="button"
+                      className="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-blue-50"
+                      onClick={() => handleOwnerSelect(owner)}
+                    >
+                      {ownerLabel(owner)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {form.existingOwnerId && (
+            <button
+              type="button"
+              className="inline-flex shrink-0 items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-1 text-[10px] font-medium text-slate-500 transition hover:bg-slate-50"
+              onClick={() => { setForm((prev) => ({ ...prev, existingOwnerId: '' })); setOwnerSearch(''); }}
+            >
+              <RefreshCw size={9} />
+            </button>
+          )}
+        </div>
+
+        {/* Owner — line 2: Phone */}
+        {!form.isWalkingPatient && (() => {
+          const linkedOwner = form.existingOwnerId
+            ? owners.find((o) => String(o.id) === String(form.existingOwnerId))
+            : null;
+          const linkedPhone = linkedOwner?.phone || '';
+          if (linkedPhone) {
+            return (
+              <input
+                type="tel"
+                readOnly
+                value={linkedPhone}
+                className={`${inputXs} w-full cursor-default bg-slate-100 text-slate-500`}
+              />
+            );
+          }
+          if (!form.existingOwnerId) {
+            return (
+              <input
+                type="tel"
+                className={`${inputXs} w-full`}
+                value={form.ownerPhone}
+                onChange={(e) => handleInputChange('ownerPhone', e.target.value)}
+                placeholder="Phone"
+              />
+            );
+          }
+          return null;
+        })()}
+
+        {/* Passbook + action buttons */}
+        <div className="flex items-center gap-1.5 rounded-lg border border-sky-100 bg-sky-50 px-2 py-1">
+          <span className="text-[10px] font-semibold text-sky-600 whitespace-nowrap">
+            {initialValues?.passbookNumber ? 'PB' : 'Next PB'}
+          </span>
+          <span className="font-mono text-xs font-bold text-slate-700 flex-1">
+            {passbookLoading ? '…' : passbookPreview || '—'}
+          </span>
+          <button
+            type="button"
+            data-print-passbook
+            className="inline-flex items-center gap-1 rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-40"
+            onClick={handlePrintPassbookBarcode}
+            disabled={!passbookPreview}
+            title="Print passbook barcode (F4)"
+          >
+            <Printer size={9} /> Print
+          </button>
+          {onViewPatientInfo && initialValues && (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white transition hover:bg-blue-700"
+              onClick={onViewPatientInfo}
+            >
+              <Eye size={9} /> Info
+            </button>
+          )}
+          {canUpdateExisting && (
+            <button
+              type="button"
+              className="inline-flex items-center rounded bg-slate-600 px-2 py-0.5 text-[10px] font-semibold text-white transition hover:bg-slate-700 disabled:opacity-40"
+              onClick={handleUpdateExisting}
+              disabled={saving}
+            >
+              {saving ? '…' : 'Save'}
+            </button>
+          )}
+          {!canUpdateExisting && !hideActions && (
+            <button
+              type="button"
+              className="inline-flex items-center rounded bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white transition hover:bg-blue-700 disabled:opacity-40"
+              onClick={handleSubmit}
+              disabled={saving}
+            >
+              {saving ? '…' : 'Register'}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── DEFAULT (wide horizontal) layout ────────────────────────────────────
+  return (
+    <div className="space-y-1.5">
+      {error && (
+        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs text-rose-700">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">
+          {success}
+        </div>
+      )}
+
+      {/* ── Row 1: Patient identity — full-width inline ── */}
+      <div className="flex w-full items-center gap-1.5">
+
+        {/* Name — hidden when provided inline by PatientSearch */}
+        {!hideNameField && (
+          <input
+            type="text"
+            className={`${inputXs} flex-1 min-w-0`}
+            value={form.patientName}
+            onChange={(e) => handleInputChange('patientName', capitalizeFirstLetter(e.target.value))}
+            placeholder="Name *"
+          />
+        )}
+
+        {/* Gender M / F */}
+        <div className="flex overflow-hidden rounded border border-slate-200 shrink-0">
+          {[['male','M'],['female','F']].map(([val, lbl], i) => (
+            <button
+              key={val}
+              type="button"
+              onClick={() => handleInputChange('gender', val)}
+              className={`px-3 py-1.5 text-xs font-bold transition ${i === 0 ? 'border-r border-slate-200' : ''} ${
+                form.gender === val ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {lbl}
+            </button>
+          ))}
+        </div>
+
+        <div className="h-3.5 w-px shrink-0 bg-slate-200" />
+
+        {/* Species pills */}
+        <div className="flex overflow-hidden rounded border border-slate-200 shrink-0">
+          {[['Canine','Dog'],['Feline','Cat'],['Other','…']].map(([val, lbl], i) => {
+            const active = val === 'Other' ? isOther : form.species === val;
+            return (
               <button
                 key={val}
                 type="button"
-                onClick={() => handleInputChange('gender', val)}
-                className={`px-3 py-1.5 text-xs font-bold transition ${i === 0 ? 'border-r border-slate-200' : ''} ${
-                  form.gender === val ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                onClick={() => handleInputChange('species', val === 'Other' ? '' : val)}
+                className={`px-2.5 py-1.5 text-xs font-semibold transition ${i < 2 ? 'border-r border-slate-200' : ''} ${
+                  active ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
                 }`}
               >
                 {lbl}
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
-
-        {/* Age Y */}
-        <div className="flex flex-col gap-1 w-20">
-          <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Yr</label>
+        {isOther && (
           <input
-            type="number" min="0" max="30"
-            className="input input-sm input-bordered w-full bg-white text-center text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-            value={form.ageYears}
-            onChange={(e) => handleInputChange('ageYears', e.target.value)}
-            placeholder="0"
+            type="text"
+            className={`${inputXs} w-24 shrink-0`}
+            value={form.species}
+            onChange={(e) => handleInputChange('species', capitalizeFirstLetter(e.target.value))}
+            placeholder="Species"
+            autoFocus
           />
-        </div>
+        )}
 
-        {/* Age M */}
-        <div className="flex flex-col gap-1 w-20">
-          <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Mo</label>
-          <input
-            type="number" min="0" max="12"
-            className="input input-sm input-bordered w-full bg-white text-center text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-            value={form.ageMonths}
-            onChange={(e) => handleInputChange('ageMonths', e.target.value)}
-            placeholder="0"
-          />
-        </div>
+        {/* Breed — grows to fill remaining space */}
+        <input
+          type="text"
+          list={BREED_DATALIST_ID}
+          className={`${inputXs} flex-1 min-w-0`}
+          value={form.breed}
+          onChange={(e) => handleInputChange('breed', capitalizeFirstLetter(e.target.value))}
+          placeholder="Breed"
+        />
+        <datalist id={BREED_DATALIST_ID}>
+          {DEFAULT_BREEDS.map((opt) => <option key={opt} value={opt} />)}
+        </datalist>
 
-        {/* Weight */}
-        <div className="flex flex-col gap-1 w-24">
-          <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Kg</label>
-          <input
-            type="number" min="0" step="0.1"
-            className="input input-sm input-bordered w-full bg-white text-center text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-            value={form.weight}
-            onChange={(e) => handleInputChange('weight', e.target.value)}
-            placeholder="0.0"
-          />
-        </div>
+        <div className="h-3.5 w-px shrink-0 bg-slate-200" />
+
+        <input
+          type="number" min="0" max="30"
+          className={`${inputXs} w-14 shrink-0 text-center`}
+          value={form.ageYears}
+          onChange={(e) => handleInputChange('ageYears', e.target.value)}
+          placeholder="Yr"
+        />
+        <input
+          type="number" min="0" max="11"
+          className={`${inputXs} w-14 shrink-0 text-center`}
+          value={form.ageMonths}
+          onChange={(e) => handleInputChange('ageMonths', e.target.value)}
+          placeholder="Mo"
+        />
+        <input
+          type="number" min="0" step="0.1"
+          className={`${inputXs} w-16 shrink-0 text-center`}
+          value={form.weight}
+          onChange={(e) => handleInputChange('weight', e.target.value)}
+          placeholder="Kg"
+        />
       </div>
 
       {/* ── Row 2: Owner + Passbook — single inline bar ── */}
