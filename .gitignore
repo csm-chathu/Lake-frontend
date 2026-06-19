@@ -11,6 +11,7 @@ yarn-error.log
 
 # Vite / build
 dist/
+dist*/
 public/build/
 public/hot
 
